@@ -310,6 +310,140 @@ export async function regenerateInviteCode(
   return { data: newCode };
 }
 
+export async function getTeamMembers(
+  teamId: string
+): Promise<ActionResult<{ id: string; name: string; email: string; role: "admin" | "member"; joined_at: string }[]>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { data: membership } = await supabase
+    .from("user_teams")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("team_id", teamId)
+    .is("left_at", null)
+    .single();
+  if (!membership) return { error: "접근 권한이 없습니다." };
+
+  const { data, error } = await supabase
+    .from("user_teams")
+    .select("role, joined_at, users(id, name, email)")
+    .eq("team_id", teamId)
+    .is("left_at", null)
+    .order("joined_at", { ascending: true });
+
+  if (error) return { error: "멤버 목록을 불러올 수 없습니다." };
+
+  const members = (data ?? []).map((row) => {
+    const u = row.users as unknown as { id: string; name: string; email: string };
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: row.role as "admin" | "member",
+      joined_at: row.joined_at,
+    };
+  });
+
+  return { data: members };
+}
+
+export async function updateTeam(
+  teamId: string,
+  fields: { name?: string; description?: string; category?: string; is_public?: boolean }
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { data: membership } = await supabase
+    .from("user_teams")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("team_id", teamId)
+    .is("left_at", null)
+    .single();
+  if (!membership || membership.role !== "admin") return { error: "운영자만 수정할 수 있습니다." };
+
+  const updates: Record<string, unknown> = {};
+  if (fields.name !== undefined) {
+    const name = fields.name.trim();
+    if (!name || name.length < 2 || name.length > 40) return { error: "그룹 이름은 2~40자여야 합니다." };
+    updates.name = name;
+  }
+  if (fields.description !== undefined) updates.description = fields.description.trim().slice(0, 200) || null;
+  if (fields.category !== undefined) updates.category = fields.category || null;
+  if (fields.is_public !== undefined) updates.is_public = fields.is_public;
+
+  const { error } = await supabase.from("teams").update(updates).eq("id", teamId);
+  if (error) return { error: "그룹 정보 수정 중 오류가 발생했습니다." };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/explore");
+  return {};
+}
+
+export async function kickMember(teamId: string, userId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+  if (user.id === userId) return { error: "자신을 강제 탈퇴할 수 없습니다." };
+
+  const { data: membership } = await supabase
+    .from("user_teams")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("team_id", teamId)
+    .is("left_at", null)
+    .single();
+  if (!membership || membership.role !== "admin") return { error: "운영자만 강제 탈퇴할 수 있습니다." };
+
+  const { data: target } = await supabase
+    .from("user_teams")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("team_id", teamId)
+    .is("left_at", null)
+    .single();
+  if (target?.role === "admin") return { error: "운영자는 강제 탈퇴할 수 없습니다. 역할을 먼저 변경하세요." };
+
+  const { error } = await supabase
+    .from("user_teams")
+    .update({ left_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("team_id", teamId);
+
+  if (error) return { error: "강제 탈퇴 처리 중 오류가 발생했습니다." };
+  revalidatePath("/dashboard");
+  return {};
+}
+
+export async function transferAdmin(teamId: string, userId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+  if (user.id === userId) return { error: "자신에게 운영자를 양도할 수 없습니다." };
+
+  const { data: membership } = await supabase
+    .from("user_teams")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("team_id", teamId)
+    .is("left_at", null)
+    .single();
+  if (!membership || membership.role !== "admin") return { error: "운영자만 권한을 양도할 수 있습니다." };
+
+  const [{ error: e1 }, { error: e2 }] = await Promise.all([
+    supabase.from("user_teams").update({ role: "admin" }).eq("user_id", userId).eq("team_id", teamId).is("left_at", null),
+    supabase.from("user_teams").update({ role: "member" }).eq("user_id", user.id).eq("team_id", teamId).is("left_at", null),
+  ]);
+
+  if (e1 || e2) return { error: "운영자 양도 중 오류가 발생했습니다." };
+  revalidatePath("/dashboard");
+  return {};
+}
+
 export async function leaveTeam(teamId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const {

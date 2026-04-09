@@ -15,6 +15,7 @@ import {
   Check,
   Plus,
   RefreshCw,
+  SlidersHorizontal,
 } from "lucide-react";
 import type { Team, GroupCategory } from "@/types";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/types";
@@ -134,6 +135,14 @@ export default function TeamHeader({ teams, activeTeam }: TeamHeaderProps) {
                 )}
 
                 <div className="p-1">
+                  <Link
+                    href={`/group-settings?team=${activeTeam.id}`}
+                    onClick={() => setShowMenu(false)}
+                    className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  >
+                    <SlidersHorizontal className="w-4 h-4 text-zinc-400" />
+                    {activeTeam.role === "admin" ? "그룹 설정 · 멤버 관리" : "멤버 목록 · 그룹 탈퇴"}
+                  </Link>
                   <Link
                     href="/explore"
                     onClick={() => setShowMenu(false)}

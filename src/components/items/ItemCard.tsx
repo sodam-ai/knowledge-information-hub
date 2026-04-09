@@ -17,6 +17,10 @@ export default function ItemCard({ item: initialItem }: ItemCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPinning, setIsPinning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const NOTE_PREVIEW_LIMIT = 120;
+  const isLongNote = item.type === "note" && (item.content?.length ?? 0) > NOTE_PREVIEW_LIMIT;
 
   // 수정 폼 상태
   const [editTitle, setEditTitle] = useState(item.title);
@@ -188,9 +192,19 @@ export default function ItemCard({ item: initialItem }: ItemCardProps) {
 
             {/* 노트 미리보기 */}
             {item.type === "note" && item.content && (
-              <p className="mt-1.5 text-xs text-zinc-500 line-clamp-2 leading-relaxed">
-                {item.content}
-              </p>
+              <div className="mt-1.5">
+                <p className={`text-xs text-zinc-500 leading-relaxed whitespace-pre-wrap ${isExpanded ? "" : "line-clamp-2"}`}>
+                  {item.content}
+                </p>
+                {isLongNote && (
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="mt-1 text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
+                  >
+                    {isExpanded ? "접기 ↑" : "더 보기 ↓"}
+                  </button>
+                )}
+              </div>
             )}
 
             {/* 링크 도메인 */}
