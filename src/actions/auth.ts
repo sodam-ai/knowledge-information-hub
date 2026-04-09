@@ -3,8 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import crypto from "crypto";
+import { sanitizeText } from "@/lib/utils";
 import type { ActionResult } from "@/types";
 
 const signUpSchema = z.object({
@@ -204,4 +206,29 @@ export async function deleteAccount(): Promise<ActionResult> {
   await serviceClient.auth.admin.deleteUser(user.id);
 
   redirect("/login");
+}
+
+export async function updateProfile(
+  prevState: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const raw = formData.get("name") as string;
+  const name = sanitizeText(raw?.trim() ?? "", 50);
+
+  if (!name || name.length < 1) return { error: "이름을 입력해주세요." };
+  if (name.length > 50) return { error: "이름은 50자 이하여야 합니다." };
+
+  const { error } = await supabase
+    .from("users")
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq("id", user.id);
+
+  if (error) return { error: "프로필 업데이트 중 오류가 발생했습니다." };
+
+  revalidatePath("/settings");
+  return {};
 }

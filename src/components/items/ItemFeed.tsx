@@ -15,21 +15,33 @@ interface ItemFeedProps {
   onAddClick?: () => void;
 }
 
+function sortItems(items: (Item & { tags?: Tag[] })[]) {
+  return [...items].sort((a, b) => {
+    if (a.is_pinned && !b.is_pinned) return -1;
+    if (!a.is_pinned && b.is_pinned) return 1;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+}
+
 export default function ItemFeed({ initialItems, teamId, totalCount, onAddClick }: ItemFeedProps) {
   const [filter, setFilter] = useState<FilterType>("all");
-  const [items, setItems] = useState(initialItems);
+  const [items, setItems] = useState(sortItems(initialItems));
   const [isPending, startTransition] = useTransition();
 
   const filtered = filter === "all" ? items : items.filter((i) => i.type === filter);
   const linkCount = items.filter((i) => i.type === "link").length;
   const noteCount = items.filter((i) => i.type === "note").length;
-  const hasMore = items.length < totalCount;
+
+  // 현재 필터 기준 서버 총 개수 (all만 totalCount 사용, 타입별은 클라이언트 카운트 기반)
+  const hasMore = filter === "all"
+    ? items.length < totalCount
+    : false; // 타입별 load more는 전체 로드 후 필터링으로 대응
 
   function handleLoadMore() {
     startTransition(async () => {
       const result = await getMoreItems(teamId, items.length);
       if (result.data) {
-        setItems((prev) => [...prev, ...result.data!]);
+        setItems((prev) => sortItems([...prev, ...result.data!]));
       }
     });
   }
@@ -105,7 +117,7 @@ export default function ItemFeed({ initialItems, teamId, totalCount, onAddClick 
       )}
 
       {/* 더 보기 */}
-      {hasMore && filter === "all" && (
+      {hasMore && (
         <button
           onClick={handleLoadMore}
           disabled={isPending}

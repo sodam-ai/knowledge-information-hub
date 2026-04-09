@@ -236,6 +236,131 @@ export async function getMoreItems(
   return { data: items };
 }
 
+export async function updateItem(
+  itemId: string,
+  fields: { title?: string; content?: string; tags?: string }
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  // 소유권 확인
+  const { data: item } = await supabase
+    .from("items")
+    .select("id, team_id, created_by")
+    .eq("id", itemId)
+    .eq("is_deleted", false)
+    .single();
+
+  if (!item) return { error: "항목을 찾을 수 없습니다." };
+
+  // 그룹 멤버인지 확인
+  const { data: membership } = await supabase
+    .from("user_teams")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("team_id", item.team_id)
+    .is("left_at", null)
+    .single();
+
+  if (!membership) return { error: "접근 권한이 없습니다." };
+
+  // 작성자 본인 또는 운영자만 수정 가능
+  if (item.created_by !== user.id && membership.role !== "admin") {
+    return { error: "수정 권한이 없습니다." };
+  }
+
+  const updates: Record<string, string> = {};
+  if (fields.title !== undefined) {
+    const clean = sanitizeText(fields.title.trim(), 500);
+    if (!clean || clean.length > 500) return { error: "제목은 1~500자여야 합니다." };
+    updates.title = clean;
+  }
+  if (fields.content !== undefined) {
+    updates.content = sanitizeText(fields.content.trim(), 50000);
+  }
+
+  if (Object.keys(updates).length > 0) {
+    updates.updated_at = new Date().toISOString();
+    const { error: updateErr } = await supabase
+      .from("items")
+      .update(updates)
+      .eq("id", itemId);
+    if (updateErr) return { error: "수정 중 오류가 발생했습니다." };
+  }
+
+  // 태그 업데이트
+  if (fields.tags !== undefined) {
+    const rawTags = fields.tags
+      .split(",")
+      .map((t) => sanitizeText(t.trim().toLowerCase(), 30))
+      .filter((t) => t.length > 0 && t.length <= 30)
+      .slice(0, 10);
+
+    // 기존 태그 연결 삭제
+    await supabase.from("item_tags").delete().eq("item_id", itemId);
+
+    if (rawTags.length > 0) {
+      // 태그 upsert
+      const { data: tagRows } = await supabase
+        .from("tags")
+        .upsert(
+          rawTags.map((name) => ({ name, team_id: item.team_id })),
+          { onConflict: "name,team_id", ignoreDuplicates: false }
+        )
+        .select("id");
+
+      if (tagRows && tagRows.length > 0) {
+        await supabase.from("item_tags").insert(
+          tagRows.map((t) => ({ item_id: itemId, tag_id: t.id, is_auto: false }))
+        );
+      }
+    }
+  }
+
+  revalidatePath("/dashboard");
+  return {};
+}
+
+export async function togglePinItem(itemId: string): Promise<ActionResult<boolean>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { data: item } = await supabase
+    .from("items")
+    .select("id, team_id, is_pinned, created_by")
+    .eq("id", itemId)
+    .eq("is_deleted", false)
+    .single();
+
+  if (!item) return { error: "항목을 찾을 수 없습니다." };
+
+  const { data: membership } = await supabase
+    .from("user_teams")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("team_id", item.team_id)
+    .is("left_at", null)
+    .single();
+
+  if (!membership) return { error: "접근 권한이 없습니다." };
+  if (item.created_by !== user.id && membership.role !== "admin") {
+    return { error: "핀 권한이 없습니다." };
+  }
+
+  const newPinned = !item.is_pinned;
+  const { error } = await supabase
+    .from("items")
+    .update({ is_pinned: newPinned, updated_at: new Date().toISOString() })
+    .eq("id", itemId);
+
+  if (error) return { error: "핀 처리 중 오류가 발생했습니다." };
+
+  revalidatePath("/dashboard");
+  return { data: newPinned };
+}
+
 export async function searchItems(
   teamId: string,
   query: string
