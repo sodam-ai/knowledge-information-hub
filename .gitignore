@@ -40,3 +40,9 @@ next-env.d.ts
 
 # Supabase temp files
 supabase/.temp/
+
+# Google OAuth credentials (NEVER commit)
+client_secret_*.json
+*.apps.googleusercontent.com.json
+
+.vercel
