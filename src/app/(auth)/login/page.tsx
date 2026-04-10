@@ -1,11 +1,22 @@
 "use client";
 
 import { useActionState } from "react";
-import { signIn, signInWithOAuth } from "@/actions/auth";
+import { signIn } from "@/actions/auth";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import type { ActionResult } from "@/types";
 
 const initialState: ActionResult = {};
+
+async function signInWithOAuth(provider: "google" | "github" | "kakao") {
+  const supabase = createClient();
+  await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+}
 
 export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(signIn, initialState);

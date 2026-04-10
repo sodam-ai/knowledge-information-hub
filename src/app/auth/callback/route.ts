@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
           // 세션 쿠키를 redirect 응답에 직접 포함
           cookiesToSet.forEach(({ name, value, options }) => {
             successResponse.cookies.set(name, value, options);

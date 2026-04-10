@@ -95,16 +95,6 @@ export async function signIn(
   redirect("/dashboard");
 }
 
-export async function signInWithOAuth(provider: "google" | "github" | "kakao") {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback` },
-  });
-
-  if (error) return { error: "소셜 로그인에 실패했습니다." };
-  if (data.url) redirect(data.url);
-}
 
 export async function signOut() {
   const supabase = await createClient();
