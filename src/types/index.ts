@@ -138,7 +138,7 @@ export interface CreateTeamInput {
   name: string;
   description?: string;
   category?: GroupCategory;
-  is_public?: boolean;
+  // is_public removed: all groups are public community
 }
 
 export interface ActionResult<T = void> {

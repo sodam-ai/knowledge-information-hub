@@ -8,9 +8,9 @@ import {
   transferAdmin,
   leaveTeam,
 } from "@/actions/teams";
-import { Crown, UserMinus, LogOut, Shield, Globe, Lock, ChevronDown } from "lucide-react";
+import { Crown, UserMinus, LogOut, Shield, ChevronDown } from "lucide-react";
 import type { Team, GroupCategory } from "@/types";
-import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/types";
+import { CATEGORY_LABELS } from "@/types";
 import { GROUP_CATEGORIES } from "@/lib/validations";
 
 interface Member {
@@ -43,8 +43,7 @@ export default function GroupSettingsClient({
   // 그룹 정보 폼
   const [name, setName] = useState(team.name);
   const [description, setDescription] = useState(team.description ?? "");
-  const [category, setCategory] = useState(team.category ?? "");
-  const [isPublic, setIsPublic] = useState(team.is_public);
+  const [category, setCategory] = useState<string>(team.category ?? "");
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   function showMsg(type: "error" | "success", msg: string) {
@@ -55,7 +54,7 @@ export default function GroupSettingsClient({
 
   function handleSaveGroup() {
     startTransition(async () => {
-      const result = await updateTeam(team.id, { name, description, category, is_public: isPublic });
+      const result = await updateTeam(team.id, { name, description, category });
       if (result.error) showMsg("error", result.error);
       else showMsg("success", "그룹 정보가 저장되었습니다.");
     });
@@ -94,7 +93,6 @@ export default function GroupSettingsClient({
     });
   }
 
-  const catColors = category ? CATEGORY_COLORS[category as GroupCategory] : null;
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
@@ -151,33 +149,6 @@ export default function GroupSettingsClient({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-600">공개 설정</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setIsPublic(false)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                  !isPublic ? "bg-zinc-900 text-white border-transparent" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
-                }`}
-              >
-                <Lock className="w-3.5 h-3.5" />
-                비공개
-              </button>
-              <button
-                onClick={() => setIsPublic(true)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                  isPublic ? "bg-zinc-900 text-white border-transparent" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5" />
-                공개
-              </button>
-            </div>
-            <p className="text-xs text-zinc-400">
-              {isPublic ? "탐색 페이지에 노출됩니다. 최대 500명 참여." : "초대 코드가 있어야 참여 가능합니다. 최대 20명."}
-            </p>
-          </div>
-
           <button
             onClick={handleSaveGroup}
             disabled={isPending}
@@ -207,7 +178,6 @@ export default function GroupSettingsClient({
                 key={member.id}
                 className="flex items-center gap-3 py-2.5 px-3 rounded-xl hover:bg-zinc-50 transition-colors"
               >
-                {/* 아바타 */}
                 <div className="w-8 h-8 bg-zinc-200 rounded-full flex items-center justify-center text-xs font-bold text-zinc-600 flex-shrink-0">
                   {member.name.slice(0, 1).toUpperCase()}
                 </div>
@@ -228,7 +198,6 @@ export default function GroupSettingsClient({
                   <p className="text-xs text-zinc-400 truncate">{joinDate} 참여</p>
                 </div>
 
-                {/* 운영자 액션 (자신 제외) */}
                 {role === "admin" && !isMe && (
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {member.role === "member" && (

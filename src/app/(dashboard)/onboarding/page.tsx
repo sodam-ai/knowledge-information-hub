@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createTeam, joinTeam } from "@/actions/teams";
 import Link from "next/link";
-import { Users, Link2, Globe, Lock, ChevronDown } from "lucide-react";
+import { Users, Link2, ChevronDown } from "lucide-react";
 import type { ActionResult, Team, GroupCategory } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
 import { GROUP_CATEGORIES } from "@/lib/validations";
@@ -14,7 +14,6 @@ const joinInitialState: ActionResult = {};
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [isPublic, setIsPublic] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<GroupCategory | "">("");
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
 
@@ -151,48 +150,6 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            {/* 공개/비공개 토글 */}
-            <div className="space-y-2">
-              <span className="block text-xs font-medium text-zinc-600">공개 범위</span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPublic(false)}
-                  className={`flex items-center gap-2.5 px-3 py-3 rounded-xl border text-left transition-all ${
-                    !isPublic
-                      ? "border-zinc-900 bg-zinc-900 text-white"
-                      : "border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50"
-                  }`}
-                >
-                  <Lock className="w-4 h-4 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-medium">비공개</p>
-                    <p className={`text-xs mt-0.5 ${!isPublic ? "text-zinc-300" : "text-zinc-400"}`}>
-                      초대 코드로만 참여
-                    </p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPublic(true)}
-                  className={`flex items-center gap-2.5 px-3 py-3 rounded-xl border text-left transition-all ${
-                    isPublic
-                      ? "border-zinc-900 bg-zinc-900 text-white"
-                      : "border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50"
-                  }`}
-                >
-                  <Globe className="w-4 h-4 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-medium">공개</p>
-                    <p className={`text-xs mt-0.5 ${isPublic ? "text-zinc-300" : "text-zinc-400"}`}>
-                      탐색에서 발견 가능
-                    </p>
-                  </div>
-                </button>
-              </div>
-              <input type="hidden" name="is_public" value={isPublic ? "true" : "false"} />
-            </div>
-
             <button
               type="submit"
               disabled={isCreatePending}
@@ -243,12 +200,8 @@ export default function OnboardingPage() {
 
         {/* 하단 링크 */}
         <div className="flex items-center justify-center gap-4 pt-2">
-          <Link
-            href="/explore"
-            className="text-xs text-zinc-500 hover:text-zinc-900 transition-colors flex items-center gap-1"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            공개 그룹 탐색
+          <Link href="/explore" className="text-xs text-zinc-500 hover:text-zinc-900 transition-colors">
+            그룹 탐색
           </Link>
           <span className="text-zinc-300">·</span>
           <Link href="/dashboard" className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">

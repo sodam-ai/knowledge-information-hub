@@ -25,7 +25,6 @@ export async function createTeam(
     name: formData.get("name"),
     description: formData.get("description") || undefined,
     category: formData.get("category") || undefined,
-    is_public: formData.get("is_public"),
   });
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
@@ -50,7 +49,7 @@ export async function createTeam(
     name: parsed.data.name,
     description: parsed.data.description ?? null,
     category: parsed.data.category ?? null,
-    is_public: parsed.data.is_public,
+    is_public: true,
     invite_code: inviteCode,
     invite_expires_at: expiresAt.toISOString(),
   });
@@ -194,16 +193,15 @@ export async function joinPublicGroup(groupId: string): Promise<ActionResult> {
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요합니다." };
 
-  // 공개 그룹 여부 확인
+  // 그룹 존재 여부 확인
   const { data: group, error: groupError } = await supabase
     .from("teams")
-    .select("id, name, is_public")
+    .select("id, name")
     .eq("id", groupId)
-    .eq("is_public", true)
     .single();
 
   if (groupError || !group) {
-    return { error: "존재하지 않거나 공개되지 않은 그룹입니다." };
+    return { error: "존재하지 않는 그룹입니다." };
   }
 
   // 그룹 소속 10개 제한
@@ -351,7 +349,7 @@ export async function getTeamMembers(
 
 export async function updateTeam(
   teamId: string,
-  fields: { name?: string; description?: string; category?: string; is_public?: boolean }
+  fields: { name?: string; description?: string; category?: string }
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -374,7 +372,6 @@ export async function updateTeam(
   }
   if (fields.description !== undefined) updates.description = fields.description.trim().slice(0, 200) || null;
   if (fields.category !== undefined) updates.category = fields.category || null;
-  if (fields.is_public !== undefined) updates.is_public = fields.is_public;
 
   const { error } = await supabase.from("teams").update(updates).eq("id", teamId);
   if (error) return { error: "그룹 정보 수정 중 오류가 발생했습니다." };

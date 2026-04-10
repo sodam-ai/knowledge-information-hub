@@ -4,10 +4,10 @@ import { useState } from "react";
 import { softDeleteItem, updateItem, togglePinItem } from "@/actions/items";
 import { formatDate } from "@/lib/utils";
 import type { Item, Tag } from "@/types";
-import { Link2, FileText, Trash2, ExternalLink, Pencil, Pin, PinOff, X, Check } from "lucide-react";
+import { Link2, FileText, Trash2, ExternalLink, Pencil, Pin, PinOff, X, Check, Users } from "lucide-react";
 
 interface ItemCardProps {
-  item: Item & { tags?: Tag[] };
+  item: Item & { tags?: Tag[]; teamName?: string };
 }
 
 export default function ItemCard({ item: initialItem }: ItemCardProps) {
@@ -22,7 +22,6 @@ export default function ItemCard({ item: initialItem }: ItemCardProps) {
   const NOTE_PREVIEW_LIMIT = 120;
   const isLongNote = item.type === "note" && (item.content?.length ?? 0) > NOTE_PREVIEW_LIMIT;
 
-  // 수정 폼 상태
   const [editTitle, setEditTitle] = useState(item.title);
   const [editContent, setEditContent] = useState(item.content ?? "");
   const [editTags, setEditTags] = useState(
@@ -75,7 +74,6 @@ export default function ItemCard({ item: initialItem }: ItemCardProps) {
       return;
     }
 
-    // 로컬 상태 즉시 반영
     setItem((prev) => ({
       ...prev,
       title: editTitle,
@@ -143,7 +141,6 @@ export default function ItemCard({ item: initialItem }: ItemCardProps) {
 
               {/* 액션 버튼 (hover 시 표시) */}
               <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                {/* 핀 */}
                 <button
                   onClick={handlePin}
                   disabled={isPinning}
@@ -161,7 +158,6 @@ export default function ItemCard({ item: initialItem }: ItemCardProps) {
                   )}
                 </button>
 
-                {/* 수정 */}
                 <button
                   onClick={handleEditOpen}
                   className="p-1.5 rounded-lg text-zinc-300 hover:text-zinc-600 hover:bg-zinc-100 transition-all"
@@ -170,7 +166,6 @@ export default function ItemCard({ item: initialItem }: ItemCardProps) {
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
 
-                {/* 삭제 */}
                 <button
                   onClick={handleDelete}
                   disabled={isDeleting}
@@ -212,8 +207,15 @@ export default function ItemCard({ item: initialItem }: ItemCardProps) {
               <p className="mt-1 text-xs text-zinc-400 truncate">{hostname}</p>
             )}
 
-            {/* 태그 + 날짜 */}
+            {/* 태그 + 그룹 배지 + 날짜 */}
             <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+              {/* 그룹 배지 (커뮤니티 피드에서만 표시) */}
+              {item.teamName && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-900 text-white">
+                  <Users className="w-2.5 h-2.5" />
+                  {item.teamName}
+                </span>
+              )}
               {item.tags?.slice(0, 5).map((tag) => (
                 <span
                   key={tag.id}

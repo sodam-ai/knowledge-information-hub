@@ -8,14 +8,16 @@ import { Inbox, Plus, Loader2, Link2, FileText } from "lucide-react";
 
 type FilterType = "all" | "link" | "note";
 
+type ExtendedItem = Item & { tags?: Tag[]; teamName?: string };
+
 interface ItemFeedProps {
-  initialItems: (Item & { tags?: Tag[] })[];
+  initialItems: ExtendedItem[];
   teamId: string;
   totalCount: number;
   onAddClick?: () => void;
 }
 
-function sortItems(items: (Item & { tags?: Tag[] })[]) {
+function sortItems(items: ExtendedItem[]) {
   return [...items].sort((a, b) => {
     if (a.is_pinned && !b.is_pinned) return -1;
     if (!a.is_pinned && b.is_pinned) return 1;
@@ -32,10 +34,8 @@ export default function ItemFeed({ initialItems, teamId, totalCount, onAddClick 
   const linkCount = items.filter((i) => i.type === "link").length;
   const noteCount = items.filter((i) => i.type === "note").length;
 
-  // 현재 필터 기준 서버 총 개수 (all만 totalCount 사용, 타입별은 클라이언트 카운트 기반)
-  const hasMore = filter === "all"
-    ? items.length < totalCount
-    : false; // 타입별 load more는 전체 로드 후 필터링으로 대응
+  // teamId === "all" means community view — disable load more
+  const hasMore = teamId !== "all" && filter === "all" && items.length < totalCount;
 
   function handleLoadMore() {
     startTransition(async () => {

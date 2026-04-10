@@ -50,10 +50,7 @@ export const createTeamSchema = z.object({
   name: safeTextField(50).refine((v) => v.length >= 1, { message: "그룹 이름을 입력해주세요" }),
   description: safeTextField(200).optional(),
   category: z.enum(GROUP_CATEGORIES).optional(),
-  is_public: z
-    .union([z.boolean(), z.literal("true"), z.literal("false"), z.literal("")])
-    .transform((v) => v === true || v === "true")
-    .default(false),
+  // is_public 제거: 모든 그룹은 공개 커뮤니티
 });
 
 export const joinTeamSchema = z.object({
