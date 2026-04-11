@@ -38,24 +38,43 @@ function PinInput({ name }: { name: string }) {
     refs[Math.min(text.length, 3)].current?.focus();
   };
 
+  const filledCount = pins.filter((p) => p !== "").length;
+
   return (
     <>
       <input type="hidden" name={name} value={pins.join("")} />
-      <div className="flex gap-3 justify-center" onPaste={handlePaste}>
-        {pins.map((p, i) => (
-          <input
-            key={i}
-            ref={refs[i]}
-            type="password"
-            inputMode="numeric"
-            maxLength={1}
-            value={p}
-            onChange={(e) => handleChange(i, e.target.value)}
-            onKeyDown={(e) => handleKeyDown(i, e)}
-            autoComplete="off"
-            className="w-16 h-16 text-center text-3xl font-bold border border-zinc-200 rounded-2xl bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent focus:bg-white transition-all"
-          />
-        ))}
+      <div className="space-y-2">
+        <div className="flex gap-2.5 justify-center" onPaste={handlePaste}>
+          {pins.map((p, i) => (
+            <input
+              key={i}
+              ref={refs[i]}
+              type="password"
+              inputMode="numeric"
+              maxLength={1}
+              value={p}
+              onChange={(e) => handleChange(i, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(i, e)}
+              autoComplete="off"
+              className={`w-14 h-14 text-center text-2xl font-bold rounded-2xl transition-all duration-150 focus:outline-none focus:ring-0 ${
+                p
+                  ? "border-2 border-zinc-900 bg-white text-zinc-900 shadow-sm"
+                  : "border-2 border-zinc-200 bg-zinc-50 text-zinc-400 focus:border-zinc-400 focus:bg-white"
+              }`}
+            />
+          ))}
+        </div>
+        {/* 입력 진행 표시 */}
+        <div className="flex justify-center gap-1">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-1.5 h-1.5 rounded-full transition-all duration-150 ${
+                i < filledCount ? "bg-zinc-900" : "bg-zinc-200"
+              }`}
+            />
+          ))}
+        </div>
       </div>
     </>
   );
@@ -70,12 +89,24 @@ export default function SignupPage() {
 
         {/* 브랜드 */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-zinc-900 rounded-2xl mb-4">
-            <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-zinc-900 rounded-2xl mb-4 shadow-sm">
+            <svg
+              className="w-7 h-7 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+              />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Knowledge Link Hub</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">
+            Knowledge Link Hub
+          </h1>
           <p className="mt-1.5 text-sm text-zinc-500">이름과 PIN으로 시작하세요</p>
         </div>
 
@@ -88,8 +119,12 @@ export default function SignupPage() {
             )}
 
             <div className="space-y-1.5">
-              <label htmlFor="name" className="block text-xs font-medium text-zinc-600">
-                이름 <span className="text-zinc-400 font-normal">(표시 이름)</span>
+              <label
+                htmlFor="name"
+                className="block text-xs font-medium text-zinc-600"
+              >
+                이름{" "}
+                <span className="text-zinc-400 font-normal">(표시 이름)</span>
               </label>
               <input
                 id="name"
@@ -105,8 +140,15 @@ export default function SignupPage() {
 
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium text-zinc-600">PIN <span className="text-zinc-400 font-normal">(4자리 숫자 · 로그인 시 사용)</span></p>
-                <p className="mt-0.5 text-xs text-zinc-400">PIN은 아이디와 비밀번호를 겸합니다. 잊지 마세요.</p>
+                <p className="text-xs font-medium text-zinc-600">
+                  PIN{" "}
+                  <span className="text-zinc-400 font-normal">
+                    (4자리 숫자 · 로그인 시 사용)
+                  </span>
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  PIN은 아이디와 비밀번호를 겸합니다. 잊지 마세요.
+                </p>
               </div>
               <PinInput name="pin" />
             </div>
@@ -114,9 +156,25 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={isPending}
-              className="w-full py-3 bg-zinc-900 text-white text-sm font-medium rounded-xl hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full py-3 bg-zinc-900 text-white text-sm font-medium rounded-xl hover:bg-zinc-800 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
             >
-              {isPending ? "가입 중..." : "회원가입"}
+              {isPending ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle
+                      className="opacity-25"
+                      cx="12" cy="12" r="10"
+                      stroke="currentColor" strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  가입 중...
+                </>
+              ) : "회원가입"}
             </button>
           </form>
 
@@ -128,8 +186,8 @@ export default function SignupPage() {
           </p>
         </div>
 
-        <p className="mt-5 text-center text-xs text-zinc-400">
-          가입 시 서비스 이용약관 및 개인정보 처리방침에 동의합니다.
+        <p className="mt-4 text-center text-xs text-zinc-400 leading-relaxed">
+          가입 시 서비스 이용약관 및<br />개인정보 처리방침에 동의합니다.
         </p>
       </div>
     </div>

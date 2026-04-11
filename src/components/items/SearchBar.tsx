@@ -17,11 +17,13 @@ export default function SearchBar({ teamId }: SearchBarProps) {
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const isAllFeed = teamId === "all";
+
   function handleSearch(q: string) {
     setQuery(q);
     setError(null);
 
-    if (q.length < 2) {
+    if (q.length < 1) {
       setResults(null);
       return;
     }
@@ -32,7 +34,7 @@ export default function SearchBar({ teamId }: SearchBarProps) {
         setError(result.error);
         setResults(null);
       } else {
-        setResults(result.data ?? []);
+        setResults((result.data ?? []) as (Item & { tags?: Tag[] })[]);
       }
     });
   }
@@ -44,7 +46,7 @@ export default function SearchBar({ teamId }: SearchBarProps) {
     inputRef.current?.focus();
   }
 
-  const isOpen = (results !== null || isPending || error) && query.length >= 2;
+  const isOpen = (results !== null || isPending || error) && query.length >= 1;
 
   return (
     <div className="relative">
@@ -60,7 +62,7 @@ export default function SearchBar({ teamId }: SearchBarProps) {
           type="search"
           value={query}
           onChange={(e) => handleSearch(e.target.value)}
-          placeholder="그룹 자료 검색... (2자 이상)"
+          placeholder={isAllFeed ? "전체 피드 검색... (제목, 내용, URL)" : "그룹 자료 검색... (제목, 내용, URL)"}
           className="w-full pl-9 pr-9 py-2.5 border border-zinc-200 rounded-xl text-sm bg-white text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
         />
         {query && (
@@ -73,7 +75,7 @@ export default function SearchBar({ teamId }: SearchBarProps) {
         )}
       </div>
 
-      {/* 검색 결과 */}
+      {/* 검색 결과 드롭다운 */}
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={handleClear} />
@@ -100,7 +102,7 @@ export default function SearchBar({ teamId }: SearchBarProps) {
                 <p className="px-2 py-1.5 text-xs text-zinc-400 font-medium">
                   {results.length}개 결과
                 </p>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {results.map((item) => (
                     <ItemCard key={item.id} item={item} />
                   ))}

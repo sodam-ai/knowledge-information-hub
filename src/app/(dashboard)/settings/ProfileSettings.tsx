@@ -2,17 +2,16 @@
 
 import { useActionState } from "react";
 import { updateProfile } from "@/actions/auth";
-import { User, Mail, Check } from "lucide-react";
+import { User, Check } from "lucide-react";
 import type { ActionResult } from "@/types";
 
 const initialState: ActionResult = {};
 
 interface ProfileSettingsProps {
   name: string;
-  email: string;
 }
 
-export default function ProfileSettings({ name, email }: ProfileSettingsProps) {
+export default function ProfileSettings({ name }: ProfileSettingsProps) {
   const [state, formAction, isPending] = useActionState(updateProfile, initialState);
 
   return (
@@ -32,19 +31,6 @@ export default function ProfileSettings({ name, email }: ProfileSettingsProps) {
         </div>
       )}
 
-      {/* 이메일 (읽기 전용) */}
-      <div className="space-y-1.5">
-        <label className="block text-xs font-medium text-zinc-600">
-          이메일
-        </label>
-        <div className="flex items-center gap-2.5 px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl">
-          <Mail className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-          <span className="text-sm text-zinc-500">{email}</span>
-        </div>
-        <p className="text-xs text-zinc-400">이메일은 변경할 수 없습니다.</p>
-      </div>
-
-      {/* 이름 수정 폼 */}
       <form action={formAction} className="space-y-3">
         <div className="space-y-1.5">
           <label htmlFor="name" className="block text-xs font-medium text-zinc-600">

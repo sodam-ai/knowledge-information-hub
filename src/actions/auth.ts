@@ -65,7 +65,7 @@ export async function signUp(
   }
 
   // 가입 Rate Limit: 동일 PIN으로 1시간에 3회
-  const rl = checkRateLimit(`signup:${pin}`, 3, 60 * 60 * 1000);
+  const rl = await checkRateLimit(`signup:${pin}`, 3, 60 * 60 * 1000);
   if (!rl.allowed) {
     return {
       error: `잠시 후 다시 시도해주세요. (${rl.retryAfterSeconds}초 후 가능)`,
@@ -135,7 +135,7 @@ export async function signIn(
   const { pin } = parsed.data;
 
   // 로그인 Rate Limit: 동일 PIN으로 10분에 5회
-  const rl = checkRateLimit(`login:${pin}`, 5, 10 * 60 * 1000);
+  const rl = await checkRateLimit(`login:${pin}`, 5, 10 * 60 * 1000);
   if (!rl.allowed) {
     return {
       error: `로그인 시도가 너무 많습니다. ${rl.retryAfterSeconds}초 후 다시 시도해주세요.`,
@@ -277,6 +277,89 @@ export async function updateProfile(
     .eq("id", user.id);
 
   if (error) return { error: "프로필 업데이트 중 오류가 발생했습니다." };
+
+  revalidatePath("/settings");
+  return {};
+}
+
+// ── PIN 변경 ─────────────────────────────────────────
+
+export async function changePin(
+  prevState: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const currentPin = formData.get("current_pin") as string;
+  const newPin = formData.get("new_pin") as string;
+
+  const schema = z.object({
+    currentPin: pinField,
+    newPin: pinField,
+  });
+  const parsed = schema.safeParse({ currentPin, newPin });
+  if (!parsed.success) {
+    return { error: parsed.error.errors[0].message };
+  }
+
+  if (parsed.data.currentPin === parsed.data.newPin) {
+    return { error: "새 PIN이 현재 PIN과 동일합니다." };
+  }
+
+  if (isWeakPin(parsed.data.newPin)) {
+    return { error: "너무 쉬운 PIN입니다. 다른 번호를 선택해주세요." };
+  }
+
+  // Rate limit: 사용자당 1시간에 3회
+  const rl = await checkRateLimit(`pin-change:${user.id}`, 3, 60 * 60 * 1000);
+  if (!rl.allowed) {
+    const mins = Math.ceil((rl.retryAfterSeconds ?? 60) / 60);
+    return { error: `PIN 변경 횟수를 초과했습니다. ${mins}분 후 다시 시도해주세요.` };
+  }
+
+  // 현재 PIN 재인증으로 검증
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email: buildInternalEmail(parsed.data.currentPin),
+    password: hashPin(parsed.data.currentPin),
+  });
+  if (verifyError) {
+    return { error: "현재 PIN이 올바르지 않습니다." };
+  }
+
+  // 새 PIN 중복 확인 (다른 계정)
+  const newEmail = buildInternalEmail(parsed.data.newPin);
+  const { data: dup } = await supabase
+    .from("users")
+    .select("id")
+    .eq("email", newEmail)
+    .neq("id", user.id)
+    .maybeSingle();
+  if (dup) {
+    return { error: "이미 사용 중인 PIN입니다. 다른 번호를 선택해주세요." };
+  }
+
+  // 어드민으로 이메일 + 비밀번호 동시 변경
+  const serviceClient = createServiceClient();
+  const { error: updateError } = await serviceClient.auth.admin.updateUserById(
+    user.id,
+    {
+      email: newEmail,
+      password: hashPin(parsed.data.newPin),
+    }
+  );
+  if (updateError) {
+    return { error: "PIN 변경 중 오류가 발생했습니다. 다시 시도해주세요." };
+  }
+
+  // users 테이블 이메일 동기화
+  await serviceClient
+    .from("users")
+    .update({ email: newEmail })
+    .eq("id", user.id);
 
   revalidatePath("/settings");
   return {};

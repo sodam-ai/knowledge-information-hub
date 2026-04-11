@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import AccountSettings from "./AccountSettings";
 import ProfileSettings from "./ProfileSettings";
+import PinSettings from "./PinSettings";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -12,7 +13,7 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("name, email")
+    .select("name")
     .eq("id", user.id)
     .single();
 
@@ -31,7 +32,8 @@ export default async function SettingsPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        <ProfileSettings name={profile?.name ?? ""} email={profile?.email ?? ""} />
+        <ProfileSettings name={profile?.name ?? ""} />
+        <PinSettings />
         <AccountSettings />
       </main>
     </div>

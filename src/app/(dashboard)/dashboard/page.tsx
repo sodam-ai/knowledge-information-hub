@@ -172,8 +172,8 @@ export default async function DashboardPage({
       />
 
       <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
-        {/* 검색 (특정 그룹 뷰에서만) */}
-        {!viewAll && <SearchBar teamId={activeTeam.id} />}
+        {/* 검색 */}
+        <SearchBar teamId={viewAll ? "all" : activeTeam.id} />
 
         {/* 헤더 행 */}
         <div className="flex items-center justify-between">

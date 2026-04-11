@@ -364,15 +364,77 @@ export async function togglePinItem(itemId: string): Promise<ActionResult<boolea
 export async function searchItems(
   teamId: string,
   query: string
-): Promise<ActionResult<Item[]>> {
+): Promise<ActionResult<(Item & { tags?: { id: string; name: string; color: string | null; team_id: string }[] })[]>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요합니다." };
 
-  if (query.length < 2) return { error: "검색어는 2자 이상 입력해주세요." };
+  if (query.length < 1) return { error: "검색어를 입력해주세요." };
   if (query.length > 200) return { error: "검색어가 너무 깁니다." };
 
-  // pg_trgm similarity 검색 + tsvector 검색 병행
+  // ── 전체 피드 검색 (teamId === "all") ─────────────────────────────────
+  if (teamId === "all") {
+    // 사용자가 속한 모든 그룹에서 검색
+    const { data: userTeams } = await supabase
+      .from("user_teams")
+      .select("team_id")
+      .eq("user_id", user.id)
+      .is("left_at", null);
+
+    const teamIds = (userTeams ?? []).map((ut) => ut.team_id);
+    if (teamIds.length === 0) return { data: [] };
+
+    // ilike는 PostgREST 파라미터화로 안전하게 처리됨 (title + content + url 검색)
+    const { data, error } = await supabase
+      .from("items")
+      .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
+      .in("team_id", teamIds)
+      .eq("is_deleted", false)
+      .or(`title.ilike.%${query}%,content.ilike.%${query}%,url.ilike.%${query}%`)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error("[searchItems:all] 오류:", error.code);
+      return { error: "검색 중 오류가 발생했습니다." };
+    }
+
+    const items = (data ?? []).map((item) => ({
+      ...item,
+      tags: (item.item_tags ?? []).map(
+        (it: { tags: { id: string; name: string; color: string | null; team_id: string } }) => it.tags
+      ),
+    }));
+    return { data: items };
+  }
+
+  // ── 단일 그룹 검색 ────────────────────────────────────────────────────
+  // pg_trgm은 2자 이상 필요 → 1자 쿼리는 ilike 직접 호출로 fallback
+  if (query.length < 2) {
+    const { data, error } = await supabase
+      .from("items")
+      .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
+      .eq("team_id", teamId)
+      .eq("is_deleted", false)
+      .or(`title.ilike.%${query}%,content.ilike.%${query}%,url.ilike.%${query}%`)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error("[searchItems:ilike] 오류:", error.code);
+      return { error: "검색 중 오류가 발생했습니다." };
+    }
+
+    const items = (data ?? []).map((item) => ({
+      ...item,
+      tags: (item.item_tags ?? []).map(
+        (it: { tags: { id: string; name: string; color: string | null; team_id: string } }) => it.tags
+      ),
+    }));
+    return { data: items };
+  }
+
+  // 2자 이상: pg_trgm similarity RPC (URL 컬럼도 RPC 내부에서 검색됨)
   const { data, error } = await supabase.rpc("search_items", {
     p_team_id: teamId,
     p_query: query,
