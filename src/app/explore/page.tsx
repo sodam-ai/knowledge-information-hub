@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { createServiceClient } from "@/lib/supabase/server";
 import ExploreClient from "./ExploreClient";
 
 export default async function ExplorePage({
@@ -7,12 +6,7 @@ export default async function ExplorePage({
 }: {
   searchParams: Promise<{ category?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const supabase = createServiceClient();
 
   const { category } = await searchParams;
 

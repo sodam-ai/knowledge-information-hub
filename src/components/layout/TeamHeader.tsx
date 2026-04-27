@@ -1,63 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { signOut } from "@/actions/auth";
-import { leaveTeam, regenerateInviteCode } from "@/actions/teams";
+import { signOut } from "@/actions/site-auth";
 import Link from "next/link";
 import {
   ChevronDown,
-  Copy,
   LogOut,
   Settings,
-  Users,
-  Check,
-  Plus,
-  RefreshCw,
-  SlidersHorizontal,
   LayoutGrid,
 } from "lucide-react";
 import type { Team, GroupCategory } from "@/types";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/types";
 
 interface TeamHeaderProps {
-  teams: (Team & { role: "admin" | "member" })[];
-  activeTeam: Team & { role: "admin" | "member" };
-  userId: string;
+  teams: Team[];
+  activeTeam: Team;
   isAllView?: boolean;
 }
 
 export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteCode, setInviteCode] = useState(activeTeam.invite_code);
-  const [copied, setCopied] = useState(false);
-  const [isRegenPending, setIsRegenPending] = useState(false);
-
-  const inviteLink =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/join?code=${inviteCode}`
-      : `/join?code=${inviteCode}`;
-
-  async function handleCopyInvite() {
-    await navigator.clipboard.writeText(inviteLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function handleRegenCode() {
-    if (!confirm("초대 코드를 재발급하면 기존 링크가 무효화됩니다. 계속할까요?")) return;
-    setIsRegenPending(true);
-    const result = await regenerateInviteCode(activeTeam.id);
-    if (result.data) setInviteCode(result.data);
-    setIsRegenPending(false);
-  }
 
   const catColors = activeTeam.category
     ? CATEGORY_COLORS[activeTeam.category as GroupCategory]
     : null;
-
-  const inviteExpiry = new Date(activeTeam.invite_expires_at);
-  const isExpired = inviteExpiry < new Date();
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-zinc-200">
@@ -123,15 +89,12 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
                     {activeTeam.description && (
                       <p className="text-xs text-zinc-400 line-clamp-1">{activeTeam.description}</p>
                     )}
-                    <p className="text-xs text-zinc-400 mt-1">
-                      {activeTeam.role === "admin" ? "운영자" : "회원"}
-                    </p>
                   </div>
                 )}
 
                 {/* 그룹 목록 */}
                 {teams.length > 0 && (
-                  <div className="p-1 border-b border-zinc-100">
+                  <div className="p-1">
                     {teams
                       .filter((t) => isAllView || t.id !== activeTeam.id)
                       .map((team) => (
@@ -153,27 +116,6 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
                       ))}
                   </div>
                 )}
-
-                <div className="p-1">
-                  {!isAllView && (
-                    <Link
-                      href={`/group-settings?team=${activeTeam.id}`}
-                      onClick={() => setShowMenu(false)}
-                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
-                    >
-                      <SlidersHorizontal className="w-4 h-4 text-zinc-400" />
-                      {activeTeam.role === "admin" ? "그룹 설정 · 멤버 관리" : "멤버 목록 · 그룹 탈퇴"}
-                    </Link>
-                  )}
-                  <Link
-                    href="/onboarding"
-                    onClick={() => setShowMenu(false)}
-                    className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
-                  >
-                    <Plus className="w-4 h-4 text-zinc-400" />
-                    새 그룹 만들기
-                  </Link>
-                </div>
               </div>
             </>
           )}
@@ -182,90 +124,11 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
         {/* 오른쪽: 액션 버튼 */}
         <div className="flex items-center gap-1 flex-shrink-0">
 
-          {/* 초대 (특정 그룹 뷰에서만) */}
-          {!isAllView && (
-            <div className="relative">
-              <button
-                onClick={() => setShowInvite(!showInvite)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span className="hidden sm:block">초대</span>
-              </button>
-
-              {showInvite && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowInvite(false)} />
-                  <div className="absolute top-full right-0 mt-2 w-72 bg-white border border-zinc-200 rounded-2xl shadow-lg z-20 p-4 space-y-3">
-                    <div>
-                      <p className="text-xs font-semibold text-zinc-900 mb-2">참여 링크</p>
-                      <div className="flex items-center gap-2">
-                        <input
-                          readOnly
-                          value={inviteLink}
-                          className="flex-1 px-2.5 py-2 text-xs border border-zinc-200 rounded-lg bg-zinc-50 text-zinc-700 truncate font-mono"
-                        />
-                        <button
-                          onClick={handleCopyInvite}
-                          className={`flex-shrink-0 p-2 rounded-lg transition-all ${
-                            copied
-                              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                              : "border border-zinc-200 hover:bg-zinc-50 text-zinc-500"
-                          }`}
-                        >
-                          {copied ? (
-                            <Check className="w-3.5 h-3.5" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                      {copied && (
-                        <p className="text-xs text-emerald-600 mt-1">복사되었습니다!</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-zinc-400">
-                      <span>
-                        만료:{" "}
-                        {isExpired ? (
-                          <span className="text-red-500">만료됨</span>
-                        ) : (
-                          inviteExpiry.toLocaleString("ko-KR", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        )}
-                      </span>
-                    </div>
-
-                    {activeTeam.role === "admin" && (
-                      <button
-                        onClick={handleRegenCode}
-                        disabled={isRegenPending}
-                        className="w-full py-2 flex items-center justify-center gap-1.5 text-xs text-zinc-600 border border-zinc-200 rounded-lg hover:bg-zinc-50 disabled:opacity-50 transition-colors"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isRegenPending ? "animate-spin" : ""}`} />
-                        {isRegenPending ? "재발급 중..." : "코드 재발급"}
-                      </button>
-                    )}
-
-                    <p className="text-xs text-zinc-400">
-                      링크 공유 시 72시간 동안 유효합니다.
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* 설정 */}
+          {/* 관리자 설정 */}
           <Link
-            href="/settings"
+            href="/admin"
             className="p-1.5 text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
-            title="설정"
+            title="관리자 설정"
           >
             <Settings className="w-4 h-4" />
           </Link>

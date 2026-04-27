@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { createLinkSchema, createNoteSchema } from "@/lib/validations";
 import { normalizeUrl, sanitizeText, sanitizeImageUrl } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
@@ -30,12 +30,10 @@ async function fetchLinkTitle(url: string): Promise<{ title: string; thumbnail?:
     const rawImage = json?.data?.image?.url ?? json?.data?.screenshot?.url;
 
     return {
-      // 위생 처리: HTML 태그 제거, 500자 절단
       title: sanitizeText(rawTitle, 500) || url,
       thumbnail: sanitizeImageUrl(rawImage) ?? undefined,
     };
   } catch {
-    // microlink 장애 시 폴백: URL을 임시 제목으로 저장
     return { title: url };
   }
 }
@@ -45,9 +43,7 @@ export async function createItem(
   _: ActionResult<Item>,
   formData: FormData
 ): Promise<ActionResult<Item>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "로그인이 필요합니다." };
+  const supabase = createServiceClient();
 
   const type = formData.get("type") as string;
   const rawTags = formData.get("tags") as string;
@@ -55,7 +51,6 @@ export async function createItem(
     ? rawTags.split(",").map((t) => t.trim()).filter(Boolean)
     : [];
 
-  // 링크 처리
   if (type === "link") {
     const parsed = createLinkSchema.safeParse({
       type: "link",
@@ -69,7 +64,6 @@ export async function createItem(
     const normalizedUrl = normalizeUrl(url);
     const urlHash = crypto.createHash("sha256").update(normalizedUrl).digest("hex");
 
-    // URL 중복 감지 (경고 토스트용 — 차단 아님)
     const { data: duplicate } = await supabase
       .from("items")
       .select("id, title")
@@ -78,7 +72,6 @@ export async function createItem(
       .eq("is_deleted", false)
       .maybeSingle();
 
-    // microlink.io 제목 자동 추출 (manualTitle 없을 때만)
     let finalTitle = manualTitle ?? "";
     let thumbnail: string | undefined;
     let titleExtractFailed = false;
@@ -87,7 +80,6 @@ export async function createItem(
       const result = await fetchLinkTitle(url);
       finalTitle = result.title;
       thumbnail = result.thumbnail;
-      // URL 그대로 반환됐다면 추출 실패
       if (finalTitle === url) titleExtractFailed = true;
     }
 
@@ -100,7 +92,7 @@ export async function createItem(
         url_hash: urlHash,
         thumbnail_url: thumbnail ?? null,
         team_id: teamId,
-        created_by: user.id,
+        created_by: null,
       })
       .select()
       .single();
@@ -115,13 +107,11 @@ export async function createItem(
 
     return {
       data: item,
-      // 중복 / 제목 추출 실패 정보를 함께 전달
       ...(duplicate ? { error: `duplicate:${duplicate.title}` } : {}),
       ...(titleExtractFailed ? { error: "title_failed" } : {}),
     };
   }
 
-  // 노트 처리
   if (type === "note") {
     const parsed = createNoteSchema.safeParse({
       type: "note",
@@ -138,7 +128,7 @@ export async function createItem(
         title: parsed.data.title,
         content: parsed.data.content,
         team_id: teamId,
-        created_by: user.id,
+        created_by: null,
       })
       .select()
       .single();
@@ -154,7 +144,7 @@ export async function createItem(
 }
 
 async function attachTags(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createServiceClient>,
   itemId: string,
   teamId: string,
   tagNames: string[]
@@ -162,7 +152,6 @@ async function attachTags(
   if (!tagNames.length) return;
 
   for (const name of tagNames.slice(0, 10)) {
-    // upsert 태그
     const { data: tag } = await supabase
       .from("tags")
       .upsert({ name, team_id: teamId }, { onConflict: "name,team_id" })
@@ -178,15 +167,12 @@ async function attachTags(
 }
 
 export async function softDeleteItem(itemId: string): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "로그인이 필요합니다." };
+  const supabase = createServiceClient();
 
   const { error } = await supabase
     .from("items")
     .update({ is_deleted: true, deleted_at: new Date().toISOString() })
     .eq("id", itemId);
-  // RLS 정책이 본인 or admin 검증
 
   if (error) return { error: "삭제 중 오류가 발생했습니다." };
 
@@ -199,38 +185,26 @@ export async function getMoreItems(
   offset: number,
   type?: "link" | "note"
 ): Promise<ActionResult<(Item & { tags: { id: string; name: string; color: string | null }[] })[]>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "로그인이 필요합니다." };
-
-  const { data: membership } = await supabase
-    .from("user_teams")
-    .select("team_id")
-    .eq("user_id", user.id)
-    .eq("team_id", teamId)
-    .is("left_at", null)
-    .single();
-
-  if (!membership) return { error: "접근 권한이 없습니다." };
+  const supabase = createServiceClient();
 
   let query = supabase
     .from("items")
-    .select("*, item_tags(tag_id, tags(id, name, color))")
-    .eq("team_id", teamId)
+    .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
     .eq("is_deleted", false)
     .order("created_at", { ascending: false })
     .range(offset, offset + 19);
 
+  if (teamId !== "all") query = query.eq("team_id", teamId);
   if (type) query = query.eq("type", type);
 
   const { data, error } = await query;
   if (error) return { error: "불러오기 실패" };
 
-  const items = (data ?? []).map((item) => ({
+  type TagRow = { id: string; name: string; color: string | null; team_id: string };
+  const rawItems = (data ?? []) as unknown as (Item & { item_tags?: { tags: TagRow }[] })[];
+  const items = rawItems.map((item) => ({
     ...item,
-    tags: (item.item_tags ?? []).map(
-      (it: { tags: { id: string; name: string; color: string | null } }) => it.tags
-    ),
+    tags: (item.item_tags ?? []).map((it: { tags: TagRow }) => it.tags),
   }));
 
   return { data: items };
@@ -240,35 +214,16 @@ export async function updateItem(
   itemId: string,
   fields: { title?: string; content?: string; tags?: string }
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "로그인이 필요합니다." };
+  const supabase = createServiceClient();
 
-  // 소유권 확인
   const { data: item } = await supabase
     .from("items")
-    .select("id, team_id, created_by")
+    .select("id, team_id")
     .eq("id", itemId)
     .eq("is_deleted", false)
     .single();
 
   if (!item) return { error: "항목을 찾을 수 없습니다." };
-
-  // 그룹 멤버인지 확인
-  const { data: membership } = await supabase
-    .from("user_teams")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("team_id", item.team_id)
-    .is("left_at", null)
-    .single();
-
-  if (!membership) return { error: "접근 권한이 없습니다." };
-
-  // 작성자 본인 또는 운영자만 수정 가능
-  if (item.created_by !== user.id && membership.role !== "admin") {
-    return { error: "수정 권한이 없습니다." };
-  }
 
   const updates: Record<string, string> = {};
   if (fields.title !== undefined) {
@@ -289,7 +244,6 @@ export async function updateItem(
     if (updateErr) return { error: "수정 중 오류가 발생했습니다." };
   }
 
-  // 태그 업데이트
   if (fields.tags !== undefined) {
     const rawTags = fields.tags
       .split(",")
@@ -297,11 +251,9 @@ export async function updateItem(
       .filter((t) => t.length > 0 && t.length <= 30)
       .slice(0, 10);
 
-    // 기존 태그 연결 삭제
     await supabase.from("item_tags").delete().eq("item_id", itemId);
 
     if (rawTags.length > 0) {
-      // 태그 upsert
       const { data: tagRows } = await supabase
         .from("tags")
         .upsert(
@@ -312,7 +264,7 @@ export async function updateItem(
 
       if (tagRows && tagRows.length > 0) {
         await supabase.from("item_tags").insert(
-          tagRows.map((t) => ({ item_id: itemId, tag_id: t.id, is_auto: false }))
+          tagRows.map((t: { id: string }) => ({ item_id: itemId, tag_id: t.id, is_auto: false }))
         );
       }
     }
@@ -323,31 +275,16 @@ export async function updateItem(
 }
 
 export async function togglePinItem(itemId: string): Promise<ActionResult<boolean>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "로그인이 필요합니다." };
+  const supabase = createServiceClient();
 
   const { data: item } = await supabase
     .from("items")
-    .select("id, team_id, is_pinned, created_by")
+    .select("id, is_pinned")
     .eq("id", itemId)
     .eq("is_deleted", false)
     .single();
 
   if (!item) return { error: "항목을 찾을 수 없습니다." };
-
-  const { data: membership } = await supabase
-    .from("user_teams")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("team_id", item.team_id)
-    .is("left_at", null)
-    .single();
-
-  if (!membership) return { error: "접근 권한이 없습니다." };
-  if (item.created_by !== user.id && membership.role !== "admin") {
-    return { error: "핀 권한이 없습니다." };
-  }
 
   const newPinned = !item.is_pinned;
   const { error } = await supabase
@@ -365,76 +302,38 @@ export async function searchItems(
   teamId: string,
   query: string
 ): Promise<ActionResult<(Item & { tags?: { id: string; name: string; color: string | null; team_id: string }[] })[]>> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "로그인이 필요합니다." };
+  const supabase = createServiceClient();
 
   if (query.length < 1) return { error: "검색어를 입력해주세요." };
   if (query.length > 200) return { error: "검색어가 너무 깁니다." };
 
-  // ── 전체 피드 검색 (teamId === "all") ─────────────────────────────────
-  if (teamId === "all") {
-    // 사용자가 속한 모든 그룹에서 검색
-    const { data: userTeams } = await supabase
-      .from("user_teams")
-      .select("team_id")
-      .eq("user_id", user.id)
-      .is("left_at", null);
-
-    const teamIds = (userTeams ?? []).map((ut) => ut.team_id);
-    if (teamIds.length === 0) return { data: [] };
-
-    // ilike는 PostgREST 파라미터화로 안전하게 처리됨 (title + content + url 검색)
-    const { data, error } = await supabase
+  if (teamId === "all" || query.length < 2) {
+    let q = supabase
       .from("items")
       .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
-      .in("team_id", teamIds)
       .eq("is_deleted", false)
       .or(`title.ilike.%${query}%,content.ilike.%${query}%,url.ilike.%${query}%`)
       .order("created_at", { ascending: false })
       .limit(20);
 
-    if (error) {
-      console.error("[searchItems:all] 오류:", error.code);
-      return { error: "검색 중 오류가 발생했습니다." };
-    }
+    if (teamId !== "all") q = q.eq("team_id", teamId);
 
-    const items = (data ?? []).map((item) => ({
-      ...item,
-      tags: (item.item_tags ?? []).map(
-        (it: { tags: { id: string; name: string; color: string | null; team_id: string } }) => it.tags
-      ),
-    }));
-    return { data: items };
-  }
-
-  // ── 단일 그룹 검색 ────────────────────────────────────────────────────
-  // pg_trgm은 2자 이상 필요 → 1자 쿼리는 ilike 직접 호출로 fallback
-  if (query.length < 2) {
-    const { data, error } = await supabase
-      .from("items")
-      .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
-      .eq("team_id", teamId)
-      .eq("is_deleted", false)
-      .or(`title.ilike.%${query}%,content.ilike.%${query}%,url.ilike.%${query}%`)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
+    const { data, error } = await q;
     if (error) {
       console.error("[searchItems:ilike] 오류:", error.code);
       return { error: "검색 중 오류가 발생했습니다." };
     }
 
-    const items = (data ?? []).map((item) => ({
+    type STagRow = { id: string; name: string; color: string | null; team_id: string };
+    const rawSearch = (data ?? []) as unknown as (Item & { item_tags?: { tags: STagRow }[] })[];
+    const items = rawSearch.map((item) => ({
       ...item,
-      tags: (item.item_tags ?? []).map(
-        (it: { tags: { id: string; name: string; color: string | null; team_id: string } }) => it.tags
-      ),
+      tags: (item.item_tags ?? []).map((it: { tags: STagRow }) => it.tags),
     }));
     return { data: items };
   }
 
-  // 2자 이상: pg_trgm similarity RPC (URL 컬럼도 RPC 내부에서 검색됨)
+  // 2자 이상 단일 그룹: pg_trgm similarity RPC
   const { data, error } = await supabase.rpc("search_items", {
     p_team_id: teamId,
     p_query: query,

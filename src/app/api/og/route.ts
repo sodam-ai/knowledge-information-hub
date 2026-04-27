@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { sanitizeText, sanitizeImageUrl } from "@/lib/utils";
 
@@ -74,15 +73,9 @@ const TIMEOUT_MS = 3_000;
 const MAX_BYTES  = 512 * 1_024; // 512 KB (head 영역으로 충분)
 
 export async function GET(req: NextRequest) {
-  // 인증 확인 — 로그인한 사용자만 허용 (프록시 남용 방지)
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Rate limit: 유저별 분당 20회 (디바운스 0.6s 기준 실사용 훨씬 미만)
-  const rl = await checkRateLimit(`og:${user.id}`, 20, 60_000);
+  // Rate limit: IP별 분당 20회
+  const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown";
+  const rl = await checkRateLimit(`og:${ip}`, 20, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
   }
