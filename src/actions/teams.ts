@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createTeamSchema, joinTeamSchema } from "@/lib/validations";
 import { revalidatePath } from "next/cache";
 import type { ActionResult, Team, PublicGroup } from "@/types";
@@ -102,6 +102,76 @@ export async function createTeam(
   ]);
 
   // user_teams 등록 후 팀 조회 (SELECT RLS 통과)
+  const { data: team } = await supabase
+    .from("teams")
+    .select()
+    .eq("id", teamId)
+    .single();
+
+  revalidatePath("/dashboard");
+  revalidatePath("/explore");
+  return { data: team };
+}
+
+export async function createTeamNoAuth(
+  _: ActionResult<Team>,
+  formData: FormData
+): Promise<ActionResult<Team>> {
+  const supabase = createServiceClient();
+
+  const parsed = createTeamSchema.safeParse({
+    name: formData.get("name"),
+    description: formData.get("description") || undefined,
+    category: formData.get("category") || undefined,
+  });
+  if (!parsed.success) return { error: parsed.error.errors[0].message };
+
+  const inviteCode = generateInviteCode();
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 72);
+  const teamId = crypto.randomUUID();
+
+  const { error: teamError } = await supabase.from("teams").insert({
+    id: teamId,
+    name: parsed.data.name,
+    description: parsed.data.description ?? null,
+    category: parsed.data.category ?? null,
+    is_public: true,
+    invite_code: inviteCode,
+    invite_expires_at: expiresAt.toISOString(),
+  });
+
+  if (teamError) {
+    console.error("[createTeamNoAuth] DB 오류:", teamError.code);
+    return { error: "그룹 생성 중 오류가 발생했습니다." };
+  }
+
+  await supabase.from("items").insert([
+    {
+      type: "link",
+      title: "지식 그룹 시작 가이드",
+      url: "https://github.com",
+      url_hash: crypto.createHash("sha256").update("https://github.com").digest("hex"),
+      team_id: teamId,
+      created_by: null,
+    },
+    {
+      type: "note",
+      title: "🎉 그룹에 오신 것을 환영합니다!",
+      content:
+        "이 공간은 링크, 노트, 파일을 한 곳에 모아두는 지식 창고입니다.\n\n✅ 링크 저장: URL을 붙여넣으면 제목이 자동으로 추출됩니다.\n✅ 노트 저장: 회의록, 아이디어, 메모를 빠르게 저장하세요.\n✅ 태그: 태그로 분류하면 나중에 쉽게 찾을 수 있습니다.\n✅ 검색: 검색창에서 키워드로 빠르게 찾으세요.",
+      team_id: teamId,
+      created_by: null,
+    },
+    {
+      type: "note",
+      title: "항목 저장하기",
+      content: "상단 '항목 저장' 버튼을 눌러 링크나 노트를 저장하세요.",
+      team_id: teamId,
+      created_by: null,
+    },
+  ]);
+
   const { data: team } = await supabase
     .from("teams")
     .select()

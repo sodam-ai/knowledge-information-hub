@@ -356,6 +356,7 @@ export default function SaveItemButton({
                 )}
               </div>
             )}
+            <input type="hidden" name="og_image" value={ogMeta?.image ?? ""} />
           </div>
         ) : (
           <>

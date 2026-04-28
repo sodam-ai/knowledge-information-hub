@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ChevronDown,
   LogOut,
+  Plus,
   Settings,
   LayoutGrid,
 } from "lucide-react";
@@ -123,6 +124,15 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
 
         {/* 오른쪽: 액션 버튼 */}
         <div className="flex items-center gap-1 flex-shrink-0">
+
+          {/* 새 그룹 만들기 */}
+          <Link
+            href="/onboarding"
+            className="p-1.5 text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
+            title="새 그룹 만들기"
+          >
+            <Plus className="w-4 h-4" />
+          </Link>
 
           {/* 관리자 설정 */}
           <Link

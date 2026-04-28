@@ -34,13 +34,22 @@ export default async function DashboardPage({
             <h1 className="text-xl font-bold text-zinc-900">Knowledge Link Hub</h1>
             <p className="mt-2 text-sm text-zinc-500">아직 그룹이 없습니다</p>
           </div>
-          <Link
-            href="/admin"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 text-white text-sm font-medium rounded-xl hover:bg-zinc-800 transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            관리자 설정으로 이동
-          </Link>
+          <div className="flex flex-col gap-2">
+            <Link
+              href="/onboarding"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 text-white text-sm font-medium rounded-xl hover:bg-zinc-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              새 그룹 만들기
+            </Link>
+            <Link
+              href="/admin"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-zinc-200 text-zinc-600 text-sm font-medium rounded-xl hover:bg-zinc-50 transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              관리자 설정으로 이동
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -152,6 +161,7 @@ export default async function DashboardPage({
         </div>
 
         <ItemFeed
+          key={`${viewAll ? "all" : activeTeam.id}-${totalCount}`}
           initialItems={mappedItems}
           teamId={viewAll ? "all" : activeTeam.id}
           totalCount={viewAll ? mappedItems.length : totalCount}

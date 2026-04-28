@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import type { ActionResult, Item } from "@/types";
 import crypto from "crypto";
 
-const MICROLINK_TIMEOUT_MS = 3000;
+const MICROLINK_TIMEOUT_MS = 7000;
 
 async function fetchLinkTitle(url: string): Promise<{ title: string; thumbnail?: string }> {
   try {
@@ -20,7 +20,7 @@ async function fetchLinkTitle(url: string): Promise<{ title: string; thumbnail?:
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), MICROLINK_TIMEOUT_MS);
 
-    const res = await fetch(apiUrl, { headers, signal: controller.signal });
+    const res = await fetch(apiUrl, { headers, signal: controller.signal, cache: "no-store" });
     clearTimeout(timeout);
 
     if (!res.ok) throw new Error("microlink 응답 오류");
@@ -72,14 +72,16 @@ export async function createItem(
       .eq("is_deleted", false)
       .maybeSingle();
 
+    const clientOgImage = sanitizeImageUrl(formData.get("og_image") as string | null);
+
     let finalTitle = manualTitle ?? "";
-    let thumbnail: string | undefined;
+    let thumbnail: string | undefined = clientOgImage ?? undefined;
     let titleExtractFailed = false;
 
     if (!finalTitle) {
-      const result = await fetchLinkTitle(url);
-      finalTitle = result.title;
-      thumbnail = result.thumbnail;
+      const ogResult = await fetchLinkTitle(url);
+      finalTitle = ogResult.title;
+      if (!thumbnail) thumbnail = ogResult.thumbnail;
       if (finalTitle === url) titleExtractFailed = true;
     }
 

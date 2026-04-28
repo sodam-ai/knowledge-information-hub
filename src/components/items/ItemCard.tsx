@@ -357,6 +357,11 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
                     {hostname}
                   </span>
                 )}
+                {item.type === "link" && item.content && (
+                  <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[150px] line-clamp-1">
+                    {item.content}
+                  </span>
+                )}
                 {item.type === "note" && item.content && !isExpanded && (
                   <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[120px]">
                     {item.content}
@@ -414,13 +419,13 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
               </div>
             </div>
 
-            {/* 썸네일 (sm+, 링크만) */}
+            {/* 썸네일 (링크만) */}
             {item.type === "link" && item.thumbnail_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={item.thumbnail_url}
                 alt=""
-                className="hidden sm:block w-10 h-7 object-cover rounded-md flex-shrink-0 bg-zinc-100"
+                className="w-14 h-10 object-cover rounded-md flex-shrink-0 bg-zinc-100"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             )}

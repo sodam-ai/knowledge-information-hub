@@ -24,6 +24,45 @@ function sortItems(items: ExtendedItem[]) {
   });
 }
 
+type DateGroup = { label: string; items: ExtendedItem[] };
+
+function groupItemsByDate(items: ExtendedItem[]): DateGroup[] {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterdayStart = new Date(todayStart);
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  const weekStart = new Date(todayStart);
+  weekStart.setDate(weekStart.getDate() - 6);
+  const monthStart = new Date(todayStart);
+  monthStart.setDate(monthStart.getDate() - 29);
+
+  const buckets: DateGroup[] = [
+    { label: "오늘", items: [] },
+    { label: "어제", items: [] },
+    { label: "이번 주", items: [] },
+    { label: "이번 달", items: [] },
+    { label: "그 이전", items: [] },
+  ];
+
+  for (const item of items) {
+    const d = new Date(item.created_at);
+    const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if (dayStart >= todayStart) {
+      buckets[0].items.push(item);
+    } else if (dayStart >= yesterdayStart) {
+      buckets[1].items.push(item);
+    } else if (dayStart >= weekStart) {
+      buckets[2].items.push(item);
+    } else if (dayStart >= monthStart) {
+      buckets[3].items.push(item);
+    } else {
+      buckets[4].items.push(item);
+    }
+  }
+
+  return buckets.filter((g) => g.items.length > 0);
+}
+
 export default function ItemFeed({
   initialItems,
   teamId,
@@ -180,9 +219,24 @@ export default function ItemFeed({
             : "저장된 노트가 없어요"}
         </div>
       ) : (
-        <div className="space-y-1">
-          {filtered.map((item) => (
-            <ItemCard key={item.id} item={item} onTagClick={handleTagClick} />
+        <div className="space-y-3">
+          {/* 핀 고정 섹션 */}
+          {filtered.some((i) => i.is_pinned) && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-amber-500 px-0.5">고정됨</p>
+              {filtered.filter((i) => i.is_pinned).map((item) => (
+                <ItemCard key={item.id} item={item} onTagClick={handleTagClick} />
+              ))}
+            </div>
+          )}
+          {/* 날짜별 그룹 */}
+          {groupItemsByDate(filtered.filter((i) => !i.is_pinned)).map((group) => (
+            <div key={group.label} className="space-y-1">
+              <p className="text-xs font-medium text-zinc-400 px-0.5">{group.label}</p>
+              {group.items.map((item) => (
+                <ItemCard key={item.id} item={item} onTagClick={handleTagClick} />
+              ))}
+            </div>
           ))}
         </div>
       )}
