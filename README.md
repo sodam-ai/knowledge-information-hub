@@ -2,6 +2,8 @@
 
 > 비밀번호 하나로 누구나 접근하는 **공개형 링크·노트 지식 창고**
 
+[English Documentation →](./README.en.md)
+
 ---
 
 ## 목차
@@ -42,6 +44,7 @@
 
 ### 그룹
 - 그룹 생성 (공개 / 비공개)
+- 초대 코드로 참여 (`/join` — 운영자에게 받은 코드 입력, 만료일 자동 검증)
 - 공개 그룹 탐색 페이지 (`/explore`)
 - 카테고리 분류: AI / 개발 / 디자인 / 마케팅 / 학습 / 비즈니스 / 투자 / 기타
 
@@ -70,6 +73,9 @@
 - OG 메타 미리보기 (URL 입력 시 제목·썸네일 자동 표시)
 - 카드 상세 시트 (바닥 시트 패턴, 모바일/데스크톱 대응)
 - 컴팩트 카드 레이아웃 (2행 고정, 태그 최대 2개 + 초과 표시)
+- 모바일 375px 완전 대응 (헤더·카드·다이얼로그 반응형 최적화)
+- 접근성: 핵심 버튼 aria-label 적용 (핀·수정·삭제·그룹 전환·로그아웃)
+- 에러 경계 (error.tsx) + 스켈레톤 로딩 (loading.tsx) + 전역 404 (not-found.tsx)
 
 ### 보안
 - SSRF 방어: 사설 IP/루프백/클라우드 메타데이터 차단 (HTTPS 전용)
@@ -190,9 +196,13 @@ knowledge-link-hub/
 │   ├── app/
 │   │   ├── (auth)/login/     # 열람 비밀번호 입력 페이지
 │   │   ├── (dashboard)/      # 대시보드 (피드, 그룹 전환)
+│   │   │   ├── error.tsx     #   에러 바운더리 (WSOD 방지)
+│   │   │   └── loading.tsx   #   스켈레톤 로딩 UI
+│   │   ├── not-found.tsx     # 전역 404 페이지
 │   │   ├── admin/            # 관리자 설정 페이지 (비밀번호 변경)
 │   │   ├── api/og/           # OG 메타 추출 API
 │   │   ├── explore/          # 공개 그룹 탐색 페이지
+│   │   ├── join/             # 초대 코드로 그룹 참여 페이지
 │   │   ├── onboarding/       # 새 그룹 만들기 온보딩 페이지
 │   │   └── share/            # 링크 공유 페이지
 │   ├── components/
@@ -302,6 +312,12 @@ npm run dev
 - `/admin` 페이지 접속 (관리자 비밀번호 초기값: `12341234`)
 - 열람 비밀번호와 관리자 비밀번호 변경 후 사용하세요
 
+**9. 다른 사람 초대하기**
+- `/admin` 페이지 접속 → 초대 코드 생성 버튼 클릭
+- 생성된 코드를 초대할 사람에게 전달
+- 초대받은 사람은 사이트 접속 후 `/join` 페이지에서 코드 입력
+- 초대 코드는 만료일이 있으므로 기간 내에 사용해야 합니다
+
 ### 자주 묻는 질문
 
 **Q. "npm: command not found" 오류가 나요**  
@@ -312,6 +328,9 @@ A. 이미 같은 포트를 사용하는 프로그램이 있습니다. `npx kill-
 
 **Q. 비밀번호를 잊어버렸어요**  
 A. `.env.local`의 `VIEW_PASSWORD` 또는 `ADMIN_PASSWORD` 값을 확인하세요. 배포 환경이라면 Vercel > Environment Variables에서 확인하세요.
+
+**Q. 초대 코드가 안 먹혀요**  
+A. 코드 만료 여부를 확인하세요. 만료됐다면 운영자에게 새 코드 발급을 요청하세요. 코드는 대문자로 자동 변환되므로 소문자로 입력해도 됩니다.
 
 ---
 
@@ -332,12 +351,15 @@ No registration required — anyone with the **4-digit view password** can acces
 ### Key Features
 
 - **Access**: No signup — just enter the 4-digit view password for immediate access
-- **Groups**: Create/join public or private groups, explore public groups
+- **Groups**: Create groups, join via invite code (`/join`), explore public groups
 - **Content**: Save links (auto OG meta extraction) and notes with tags
 - **Search**: Works from 1 character — Korean consonants, alphabets, and URL search (pg_trgm + ilike)
 - **Detail View**: Bottom sheet with full content, thumbnail, tags, edit/delete
 - **Toast Notifications**: Real-time feedback for save, edit, delete, error
 - **Infinite Scroll**: IntersectionObserver-based auto-loading
+- **Mobile**: Fully responsive at 375px — header, cards, dialogs all optimized
+- **Accessibility**: aria-labels on key buttons (pin, edit, delete, logout)
+- **Reliability**: Error boundary (error.tsx), skeleton loading (loading.tsx), global 404 (not-found.tsx)
 - **Security**: SSRF defense, rate limiting, Zod validation, security headers
 
 ### Quick Start
