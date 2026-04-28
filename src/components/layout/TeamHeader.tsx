@@ -45,7 +45,7 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
                 {activeTeam.name.slice(0, 1).toUpperCase()}
               </div>
             )}
-            <span className="text-sm font-semibold text-zinc-900 truncate max-w-[140px]">
+            <span className="text-sm font-semibold text-zinc-900 truncate max-w-[100px] sm:max-w-[180px]">
               {isAllView ? "전체 피드" : activeTeam.name}
             </span>
             <ChevronDown
@@ -130,6 +130,7 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
             href="/onboarding"
             className="p-1.5 text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
             title="새 그룹 만들기"
+            aria-label="새 그룹 만들기"
           >
             <Plus className="w-4 h-4" />
           </Link>
@@ -139,6 +140,7 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
             href="/admin"
             className="p-1.5 text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
             title="관리자 설정"
+            aria-label="관리자 설정"
           >
             <Settings className="w-4 h-4" />
           </Link>
@@ -149,6 +151,7 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
               type="submit"
               className="p-1.5 text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
               title="로그아웃"
+              aria-label="로그아웃"
             >
               <LogOut className="w-4 h-4" />
             </button>

@@ -353,17 +353,17 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
               {/* 행 2: 메타 — 줄바꿈 없음 */}
               <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden">
                 {item.type === "link" && hostname && (
-                  <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[80px]">
+                  <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[60px] sm:max-w-[80px]">
                     {hostname}
                   </span>
                 )}
                 {item.type === "link" && item.content && (
-                  <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[150px] line-clamp-1">
+                  <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[100px] sm:max-w-[150px] line-clamp-1">
                     {item.content}
                   </span>
                 )}
                 {item.type === "note" && item.content && !isExpanded && (
-                  <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[120px]">
+                  <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[80px] sm:max-w-[120px]">
                     {item.content}
                   </span>
                 )}
@@ -444,6 +444,7 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
                     : "text-zinc-300 hover:text-amber-400 hover:bg-amber-50"
                 }`}
                 title={item.is_pinned ? "핀 해제" : "핀 고정"}
+                aria-label={item.is_pinned ? "핀 해제" : "핀 고정"}
               >
                 {item.is_pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
               </button>
@@ -451,6 +452,7 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
                 onClick={handleEditOpen}
                 className="p-1 rounded-md text-zinc-300 hover:text-zinc-600 hover:bg-zinc-100 transition-all duration-150"
                 title="수정"
+                aria-label="수정"
               >
                 <Pencil className="w-3 h-3" />
               </button>
@@ -459,6 +461,7 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
                 disabled={isDeleting}
                 className="p-1 rounded-md text-zinc-300 hover:text-red-400 hover:bg-red-50 transition-all duration-150 disabled:opacity-30"
                 title="삭제"
+                aria-label="삭제"
               >
                 <Trash2 className="w-3 h-3" />
               </button>

@@ -378,6 +378,36 @@ export async function regenerateInviteCode(
   return { data: newCode };
 }
 
+export async function joinTeamByCodeNoAuth(
+  _: ActionResult<{ id: string }>,
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
+  const supabase = createServiceClient();
+  const raw = ((formData.get("invite_code") as string | null) ?? "").trim().toUpperCase();
+
+  if (raw.length < 4) {
+    return { error: "초대 코드를 입력해주세요." };
+  }
+
+  const { data: team, error } = await supabase
+    .from("teams")
+    .select("id, name, invite_expires_at")
+    .eq("invite_code", raw)
+    .single();
+
+  if (error || !team) {
+    return { error: "유효하지 않은 초대 코드입니다." };
+  }
+
+  if (new Date(team.invite_expires_at) < new Date()) {
+    return {
+      error: "초대 코드가 만료되었습니다. 운영자에게 새 초대 링크를 요청하세요.",
+    };
+  }
+
+  return { data: { id: team.id } };
+}
+
 export async function getTeamMembers(
   teamId: string
 ): Promise<ActionResult<{ id: string; name: string; email: string; role: "admin" | "member"; joined_at: string }[]>> {
