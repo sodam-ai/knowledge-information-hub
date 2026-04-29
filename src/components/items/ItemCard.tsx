@@ -420,7 +420,7 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
             </div>
 
             {/* 썸네일 (링크만) */}
-            {item.type === "link" && item.thumbnail_url && (
+            {item.type === "link" && item.thumbnail_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={item.thumbnail_url}
@@ -428,7 +428,15 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
                 className="w-14 h-10 object-cover rounded-md flex-shrink-0 bg-zinc-100"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
-            )}
+            ) : item.type === "link" && hostname ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`https://www.google.com/s2/favicons?domain=${hostname}&sz=32`}
+                alt=""
+                className="w-5 h-5 rounded flex-shrink-0 opacity-60"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : null}
 
             {/* 액션 버튼 — 모바일 항상, 데스크톱 hover */}
             <div
