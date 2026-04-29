@@ -161,7 +161,7 @@ export default async function DashboardPage({
         </div>
 
         <ItemFeed
-          key={`${viewAll ? "all" : activeTeam.id}-${totalCount}`}
+          key={viewAll ? "all" : activeTeam.id}
           initialItems={mappedItems}
           teamId={viewAll ? "all" : activeTeam.id}
           totalCount={viewAll ? mappedItems.length : totalCount}

@@ -81,6 +81,15 @@ export default function ItemFeed({
   const itemsLengthRef = useRef(items.length);
   useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
 
+  // 서버 새로고침(router.refresh) 후 initialItems 동기화 — totalCount 변경 감지
+  const prevTotalRef = useRef(totalCount);
+  useEffect(() => {
+    if (totalCount !== prevTotalRef.current) {
+      prevTotalRef.current = totalCount;
+      setItems(sortItems(initialItems));
+    }
+  }, [totalCount, initialItems]);
+
   // 타입 필터 적용
   const typeFiltered = filter === "all" ? items : items.filter((i) => i.type === filter);
   // 태그 필터 추가 적용

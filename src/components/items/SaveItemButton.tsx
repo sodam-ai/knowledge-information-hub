@@ -259,7 +259,7 @@ export default function SaveItemButton({
         ))}
       </div>
 
-      <form ref={formRef} action={formAction} className="p-5 space-y-3.5">
+      <form ref={formRef} action={formAction} className="px-4 pt-3 pb-4 sm:p-5 space-y-3">
         <input type="hidden" name="type" value={activeTab} />
 
         {/* 서버 에러 */}
@@ -402,7 +402,7 @@ export default function SaveItemButton({
           />
         </div>
 
-        <div className="flex gap-2 pt-1 pb-2">
+        <div className="flex gap-2 pt-1 pb-1 sm:pb-2">
           <button
             type="button"
             onClick={() => setOpen(false)}
