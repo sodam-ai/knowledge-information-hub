@@ -55,6 +55,12 @@ function detectItemCategory(type: string, url?: string | null): ItemCategory | n
   return null;
 }
 
+function detectFileCategory(filename: string): ItemCategory | null {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) return "document";
+  return null;
+}
+
 export async function createItem(
   teamId: string,
   _: ActionResult<Item>,
@@ -158,6 +164,47 @@ export async function createItem(
       .single();
 
     if (error) return { error: "저장 중 오류가 발생했습니다." };
+
+    await attachTags(supabase, item.id, teamId, tagNames);
+    revalidatePath("/dashboard");
+    return { data: item };
+  }
+
+  if (type === "file") {
+    const file = formData.get("file") as File | null;
+    if (!file || file.size === 0) return { error: "파일을 선택해주세요." };
+    if (file.size > 50 * 1024 * 1024) return { error: "파일 크기는 50MB 이하여야 합니다." };
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storagePath = `${teamId}/${Date.now()}_${safeName}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from("items")
+      .upload(storagePath, file, { contentType: file.type, upsert: false });
+
+    if (uploadErr) {
+      console.error("[createItem file] Storage 오류:", uploadErr.message);
+      return { error: "파일 업로드에 실패했습니다." };
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from("items").getPublicUrl(storagePath);
+
+    const { data: item, error: insertErr } = await supabase
+      .from("items")
+      .insert({
+        type: "file",
+        title: file.name,
+        file_path: publicUrl,
+        file_mime: file.type || "application/octet-stream",
+        team_id: teamId,
+        created_by: null,
+        collection_id: collectionId,
+        category: detectFileCategory(file.name),
+      })
+      .select()
+      .single();
+
+    if (insertErr) return { error: "저장 중 오류가 발생했습니다." };
 
     await attachTags(supabase, item.id, teamId, tagNames);
     revalidatePath("/dashboard");

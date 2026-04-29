@@ -8,7 +8,7 @@ import { formatDate } from "@/lib/utils";
 import type { Item, Tag, Collection, ItemCategory } from "@/types";
 import { ITEM_CATEGORY_LABELS, ITEM_CATEGORY_COLORS } from "@/types";
 import {
-  Link2, FileText, Trash2, ExternalLink, Pencil,
+  Link2, FileText, Paperclip, Trash2, ExternalLink, Pencil,
   Pin, PinOff, X, Check, Users, ChevronDown, ChevronUp,
   Calendar, Hash, FolderOpen,
 } from "lucide-react";
@@ -100,6 +100,8 @@ function DetailSheet({ item, onClose, onEditClick, onDeleteClick }: DetailSheetP
               <div className="flex items-start gap-2 min-w-0">
                 {item.type === "link" ? (
                   <Link2 className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                ) : item.type === "file" ? (
+                  <Paperclip className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 ) : (
                   <FileText className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
                 )}
@@ -127,6 +129,21 @@ function DetailSheet({ item, onClose, onEditClick, onDeleteClick }: DetailSheetP
                 <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="truncate flex-1 min-w-0">{item.url}</span>
                 <span className="text-xs text-zinc-400 group-hover:text-blue-400 flex-shrink-0">열기 →</span>
+              </a>
+            )}
+
+            {/* 파일 다운로드 */}
+            {item.type === "file" && item.file_path && (
+              <a
+                href={item.file_path}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="flex items-center gap-2 px-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-colors group"
+              >
+                <Paperclip className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate flex-1 min-w-0">{item.title}</span>
+                <span className="text-xs text-zinc-400 group-hover:text-emerald-500 flex-shrink-0">다운로드 →</span>
               </a>
             )}
 
@@ -334,6 +351,8 @@ export default function ItemCard({ item: initialItem, onTagClick, collections }:
             <div className="flex-shrink-0">
               {item.type === "link" ? (
                 <Link2 className="w-3.5 h-3.5 text-blue-400" />
+              ) : item.type === "file" ? (
+                <Paperclip className="w-3.5 h-3.5 text-emerald-400" />
               ) : (
                 <FileText className="w-3.5 h-3.5 text-amber-400" />
               )}
@@ -369,6 +388,11 @@ export default function ItemCard({ item: initialItem, onTagClick, collections }:
                 {item.type === "link" && hostname && (
                   <span className="text-xs text-zinc-400 truncate flex-shrink min-w-0 max-w-[60px] sm:max-w-[80px]">
                     {hostname}
+                  </span>
+                )}
+                {item.type === "file" && item.file_mime && (
+                  <span className="text-xs text-zinc-400 flex-shrink-0 font-medium">
+                    {item.file_mime.split("/")[1]?.toUpperCase() ?? "파일"}
                   </span>
                 )}
                 {item.type === "link" && item.content && (

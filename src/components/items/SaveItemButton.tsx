@@ -6,8 +6,8 @@ import { createItem } from "@/actions/items";
 import { getCollections } from "@/actions/collections";
 import { useToast } from "@/components/ui/toast";
 import {
-  Plus, Link2, FileText, X, AlertCircle, Info,
-  Loader2, Sparkles, Clipboard,
+  Plus, Link2, FileText, Upload, X, AlertCircle, Info,
+  Loader2, Sparkles, Clipboard, Paperclip,
 } from "lucide-react";
 import type { ActionResult, Item, Collection } from "@/types";
 
@@ -109,7 +109,8 @@ export default function SaveItemButton({
 
   const router = useRouter();
   const { success, warning } = useToast();
-  const [activeTab, setActiveTab] = useState<"link" | "note">("link");
+  const [activeTab, setActiveTab] = useState<"link" | "note" | "file">("link");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [titleFailed, setTitleFailed] = useState(false);
   const [saveCollections, setSaveCollections] = useState<Collection[]>([]);
@@ -164,9 +165,11 @@ export default function SaveItemButton({
       setTitleOverride("");
       setDuplicateWarning(null);
       setTitleFailed(false);
+      setSelectedFile(null);
       getCollections(teamId).then((res) => { if (res.data) setSaveCollections(res.data); });
     } else {
       setSaveCollections([]);
+      setSelectedFile(null);
     }
   }, [open, prefillUrl, teamId]);
 
@@ -245,7 +248,7 @@ export default function SaveItemButton({
 
       {/* 탭 */}
       <div className="flex gap-0 mt-4 mx-5 bg-zinc-100 rounded-xl p-1">
-        {(["link", "note"] as const).map((tab) => (
+        {(["link", "note", "file"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -257,8 +260,10 @@ export default function SaveItemButton({
           >
             {tab === "link" ? (
               <><Link2 className="w-3.5 h-3.5" /> 링크</>
-            ) : (
+            ) : tab === "note" ? (
               <><FileText className="w-3.5 h-3.5" /> 노트</>
+            ) : (
+              <><Upload className="w-3.5 h-3.5" /> 파일</>
             )}
           </button>
         ))}
@@ -363,7 +368,7 @@ export default function SaveItemButton({
             )}
             <input type="hidden" name="og_image" value={ogMeta?.image ?? ""} />
           </div>
-        ) : (
+        ) : activeTab === "note" ? (
           <>
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-zinc-600">
@@ -392,6 +397,34 @@ export default function SaveItemButton({
               />
             </div>
           </>
+        ) : (
+          <div className="space-y-2.5">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-zinc-600">
+                파일 <span className="text-red-400">*</span>
+              </label>
+              <label className="flex flex-col items-center justify-center gap-2 w-full h-28 border-2 border-dashed border-zinc-200 rounded-xl cursor-pointer hover:border-zinc-400 hover:bg-zinc-50 transition-colors">
+                <Upload className="w-6 h-6 text-zinc-300" />
+                <span className="text-xs text-zinc-400">클릭하여 파일 선택</span>
+                <span className="text-xs text-zinc-300">최대 50MB</span>
+                <input
+                  type="file"
+                  name="file"
+                  className="sr-only"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              {selectedFile && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50 border border-zinc-100 rounded-xl">
+                  <Paperclip className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                  <span className="text-xs text-zinc-700 truncate flex-1 min-w-0">{selectedFile.name}</span>
+                  <span className="text-xs text-zinc-400 flex-shrink-0">
+                    {(selectedFile.size / 1024 / 1024).toFixed(1)}MB
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="space-y-1.5">

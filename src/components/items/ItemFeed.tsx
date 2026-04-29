@@ -6,11 +6,11 @@ import { getMoreItems } from "@/actions/items";
 import type { Item, Tag, Collection, ItemCategory } from "@/types";
 import { ITEM_CATEGORY_LABELS, ITEM_CATEGORY_COLORS } from "@/types";
 import {
-  Inbox, Plus, Loader2, Link2, FileText, Tag as TagIcon, X,
+  Inbox, Plus, Loader2, Link2, FileText, Paperclip, Tag as TagIcon, X,
   Calendar, ChevronLeft, ChevronRight, FolderOpen,
 } from "lucide-react";
 
-type FilterType = "all" | "link" | "note";
+type FilterType = "all" | "link" | "note" | "file";
 type DateFilter = "all" | "today" | "week" | "month" | "custom";
 type ExtendedItem = Item & { tags?: Tag[]; teamName?: string };
 
@@ -157,6 +157,7 @@ export default function ItemFeed({
 
   const linkCount = items.filter((i) => i.type === "link").length;
   const noteCount = items.filter((i) => i.type === "note").length;
+  const fileCount = items.filter((i) => i.type === "file").length;
 
   const hasMore =
     teamId !== "all" && filter === "all" && !tagFilter &&
@@ -281,6 +282,15 @@ export default function ItemFeed({
           >
             <FileText className="w-3 h-3" />
             노트 {noteCount}
+          </button>
+          <button
+            onClick={() => setFilter("file")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 ${
+              filter === "file" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            <Paperclip className="w-3 h-3" />
+            파일 {fileCount}
           </button>
         </div>
 
