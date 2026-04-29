@@ -9,6 +9,7 @@ import {
   Plus,
   Settings,
   LayoutGrid,
+  SlidersHorizontal,
 } from "lucide-react";
 import type { Team, GroupCategory } from "@/types";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/types";
@@ -134,6 +135,18 @@ export default function TeamHeader({ teams, activeTeam, isAllView }: TeamHeaderP
           >
             <Plus className="w-4 h-4" />
           </Link>
+
+          {/* 그룹 설정 — 특정 팀 뷰에서만 */}
+          {!isAllView && (
+            <Link
+              href={`/settings?team=${activeTeam.id}`}
+              className="p-1.5 text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
+              title="그룹 설정"
+              aria-label="그룹 설정"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </Link>
+          )}
 
           {/* 관리자 설정 */}
           <Link

@@ -541,6 +541,13 @@ export async function transferAdmin(teamId: string, userId: string): Promise<Act
   return {};
 }
 
+export async function getTeamInfo(teamId: string): Promise<ActionResult<Team>> {
+  const db = createServiceClient();
+  const { data, error } = await db.from("teams").select("*").eq("id", teamId).single();
+  if (error || !data) return { error: "그룹을 찾을 수 없습니다." };
+  return { data: data as Team };
+}
+
 export async function leaveTeam(teamId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const {
