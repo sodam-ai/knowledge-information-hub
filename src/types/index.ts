@@ -34,6 +34,35 @@ export const CATEGORY_COLORS: Record<GroupCategory, { bg: string; text: string }
   etc: { bg: "bg-gray-100", text: "text-gray-600" },
 };
 
+export type ItemCategory =
+  | "article"
+  | "tutorial"
+  | "tool"
+  | "reference"
+  | "document"
+  | "idea"
+  | "etc";
+
+export const ITEM_CATEGORY_LABELS: Record<ItemCategory, string> = {
+  article: "아티클 / 뉴스",
+  tutorial: "튜토리얼",
+  tool: "도구 / 서비스",
+  reference: "레퍼런스",
+  document: "문서 / PDF",
+  idea: "아이디어",
+  etc: "기타",
+};
+
+export const ITEM_CATEGORY_COLORS: Record<ItemCategory, { bg: string; text: string }> = {
+  article:   { bg: "bg-blue-100",    text: "text-blue-700" },
+  tutorial:  { bg: "bg-amber-100",   text: "text-amber-700" },
+  tool:      { bg: "bg-emerald-100", text: "text-emerald-700" },
+  reference: { bg: "bg-sky-100",     text: "text-sky-700" },
+  document:  { bg: "bg-orange-100",  text: "text-orange-700" },
+  idea:      { bg: "bg-pink-100",    text: "text-pink-700" },
+  etc:       { bg: "bg-zinc-100",    text: "text-zinc-600" },
+};
+
 export interface Team {
   id: string;
   name: string;
@@ -86,6 +115,7 @@ export interface Item {
   file_mime: string | null;
   thumbnail_url: string | null;
   collection_id: string | null;
+  category: ItemCategory | null;
   is_pinned: boolean;
   view_count: number;
   team_id: string;
@@ -118,13 +148,14 @@ export interface DeletedEmail {
   blocked_until: string;
 }
 
-export interface Comment {
+export interface Collection {
   id: string;
-  content: string;
-  item_id: string;
-  user_id: string;
+  name: string;
+  team_id: string;
+  created_by: string | null;
   created_at: string;
 }
+
 
 export interface CreateItemInput {
   type: ItemType;

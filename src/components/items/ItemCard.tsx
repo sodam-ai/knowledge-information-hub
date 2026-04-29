@@ -2,18 +2,21 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { softDeleteItem, updateItem, togglePinItem } from "@/actions/items";
+import { moveItemToCollection } from "@/actions/collections";
 import { useToast } from "@/components/ui/toast";
 import { formatDate } from "@/lib/utils";
-import type { Item, Tag } from "@/types";
+import type { Item, Tag, Collection, ItemCategory } from "@/types";
+import { ITEM_CATEGORY_LABELS, ITEM_CATEGORY_COLORS } from "@/types";
 import {
   Link2, FileText, Trash2, ExternalLink, Pencil,
   Pin, PinOff, X, Check, Users, ChevronDown, ChevronUp,
-  Calendar, Hash,
+  Calendar, Hash, FolderOpen,
 } from "lucide-react";
 
 interface ItemCardProps {
   item: Item & { tags?: Tag[]; teamName?: string };
   onTagClick?: (tagName: string) => void;
+  collections?: Collection[];
 }
 
 // ── 상세 시트 ──────────────────────────────────────────────────────────────────
@@ -196,7 +199,7 @@ function DetailSheet({ item, onClose, onEditClick, onDeleteClick }: DetailSheetP
 
 // ── 메인 카드 ──────────────────────────────────────────────────────────────────
 
-export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProps) {
+export default function ItemCard({ item: initialItem, onTagClick, collections }: ItemCardProps) {
   const [item, setItem] = useState(initialItem);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
@@ -217,6 +220,8 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
   const [editTags, setEditTags] = useState(
     item.tags?.map((t) => t.name).join(", ") ?? ""
   );
+  const [editCollectionId, setEditCollectionId] = useState<string | null>(item.collection_id);
+  const [editCategory, setEditCategory] = useState<ItemCategory | null>(item.category);
   const [editError, setEditError] = useState<string | null>(null);
 
   const handleDelete = useCallback(async () => {
@@ -250,6 +255,8 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
     setEditTitle(item.title);
     setEditContent(item.content ?? "");
     setEditTags(item.tags?.map((t) => t.name).join(", ") ?? "");
+    setEditCollectionId(item.collection_id);
+    setEditCategory(item.category);
     setEditError(null);
     setIsEditing(true);
     setShowDetail(false);
@@ -267,6 +274,7 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
       title: editTitle,
       content: item.type === "note" ? editContent : undefined,
       tags: editTags,
+      category: editCategory,
     });
 
     if (result.error) {
@@ -275,10 +283,16 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
       return;
     }
 
+    if (editCollectionId !== item.collection_id) {
+      await moveItemToCollection(item.id, editCollectionId);
+    }
+
     setItem((prev) => ({
       ...prev,
       title: editTitle,
       content: item.type === "note" ? editContent : prev.content,
+      collection_id: editCollectionId,
+      category: editCategory,
       tags: editTags
         .split(",")
         .map((t) => t.trim())
@@ -388,6 +402,25 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
                     {item.teamName}
                   </span>
                 )}
+
+                {item.collection_id && (() => {
+                  const col = collections?.find((c) => c.id === item.collection_id);
+                  return col ? (
+                    <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium flex-shrink-0">
+                      <FolderOpen className="w-3 h-3" />
+                      {col.name}
+                    </span>
+                  ) : null;
+                })()}
+
+                {item.category && (() => {
+                  const colors = ITEM_CATEGORY_COLORS[item.category];
+                  return (
+                    <span className={`inline-flex items-center text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${colors.bg} ${colors.text}`}>
+                      {ITEM_CATEGORY_LABELS[item.category]}
+                    </span>
+                  );
+                })()}
 
                 {/* 태그 최대 2개 */}
                 {item.tags?.slice(0, 2).map((tag) => (
@@ -522,6 +555,36 @@ export default function ItemCard({ item: initialItem, onTagClick }: ItemCardProp
                 placeholder="AI, 디자인, 참고자료"
                 className="w-full px-2.5 py-1.5 border border-zinc-200 rounded-lg text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
               />
+            </div>
+
+            {collections && collections.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-zinc-500">컬렉션</label>
+                <select
+                  value={editCollectionId ?? ""}
+                  onChange={(e) => setEditCollectionId(e.target.value || null)}
+                  className="w-full px-2.5 py-1.5 border border-zinc-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                >
+                  <option value="">컬렉션 없음</option>
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">카테고리</label>
+              <select
+                value={editCategory ?? ""}
+                onChange={(e) => setEditCategory((e.target.value as ItemCategory) || null)}
+                className="w-full px-2.5 py-1.5 border border-zinc-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+              >
+                <option value="">없음</option>
+                {(Object.keys(ITEM_CATEGORY_LABELS) as ItemCategory[]).map((cat) => (
+                  <option key={cat} value={cat}>{ITEM_CATEGORY_LABELS[cat]}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex gap-1.5">

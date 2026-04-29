@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { createLinkSchema, createNoteSchema } from "@/lib/validations";
 import { normalizeUrl, sanitizeText, sanitizeImageUrl } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
-import type { ActionResult, Item } from "@/types";
+import type { ActionResult, Item, ItemCategory } from "@/types";
 import crypto from "crypto";
 
 const MICROLINK_TIMEOUT_MS = 7000;
@@ -38,6 +38,23 @@ async function fetchLinkTitle(url: string): Promise<{ title: string; thumbnail?:
   }
 }
 
+function detectItemCategory(type: string, url?: string | null): ItemCategory | null {
+  if (type === "note") return "idea";
+  if (type === "link" && url) {
+    const u = url.toLowerCase();
+    if (/github\.com|gitlab\.com|npmjs\.com|pypi\.org|hub\.docker\.com|vercel\.com|figma\.com|notion\.so|linear\.app/.test(u))
+      return "tool";
+    if (/youtube\.com\/watch|youtu\.be|udemy\.com|coursera\.|\/tutorial|\/guide|learn\./.test(u))
+      return "tutorial";
+    if (/\bdocs\.|\/docs\/|developer\.|\.dev\/|mdn\.web|stackoverflow\.com|devdocs\.io/.test(u))
+      return "reference";
+    if (u.endsWith(".pdf") || u.includes(".pdf?") || u.includes("/pdf/"))
+      return "document";
+    return "article";
+  }
+  return null;
+}
+
 export async function createItem(
   teamId: string,
   _: ActionResult<Item>,
@@ -50,6 +67,7 @@ export async function createItem(
   const tagNames: string[] = rawTags
     ? rawTags.split(",").map((t) => t.trim()).filter(Boolean)
     : [];
+  const collectionId = (formData.get("collection_id") as string | null) || null;
 
   if (type === "link") {
     const parsed = createLinkSchema.safeParse({
@@ -95,6 +113,8 @@ export async function createItem(
         thumbnail_url: thumbnail ?? null,
         team_id: teamId,
         created_by: null,
+        collection_id: collectionId,
+        category: detectItemCategory("link", url),
       })
       .select()
       .single();
@@ -131,6 +151,8 @@ export async function createItem(
         content: parsed.data.content,
         team_id: teamId,
         created_by: null,
+        collection_id: collectionId,
+        category: detectItemCategory("note"),
       })
       .select()
       .single();
@@ -214,7 +236,7 @@ export async function getMoreItems(
 
 export async function updateItem(
   itemId: string,
-  fields: { title?: string; content?: string; tags?: string }
+  fields: { title?: string; content?: string; tags?: string; category?: ItemCategory | null }
 ): Promise<ActionResult> {
   const supabase = createServiceClient();
 
@@ -227,7 +249,7 @@ export async function updateItem(
 
   if (!item) return { error: "항목을 찾을 수 없습니다." };
 
-  const updates: Record<string, string> = {};
+  const updates: Record<string, string | null> = {};
   if (fields.title !== undefined) {
     const clean = sanitizeText(fields.title.trim(), 500);
     if (!clean || clean.length > 500) return { error: "제목은 1~500자여야 합니다." };
@@ -235,6 +257,9 @@ export async function updateItem(
   }
   if (fields.content !== undefined) {
     updates.content = sanitizeText(fields.content.trim(), 50000);
+  }
+  if (fields.category !== undefined) {
+    updates.category = fields.category ?? null;
   }
 
   if (Object.keys(updates).length > 0) {

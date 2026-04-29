@@ -3,10 +3,11 @@
 import { useState, useTransition, useEffect, useRef, useCallback } from "react";
 import ItemCard from "./ItemCard";
 import { getMoreItems } from "@/actions/items";
-import type { Item, Tag } from "@/types";
+import type { Item, Tag, Collection, ItemCategory } from "@/types";
+import { ITEM_CATEGORY_LABELS, ITEM_CATEGORY_COLORS } from "@/types";
 import {
   Inbox, Plus, Loader2, Link2, FileText, Tag as TagIcon, X,
-  Calendar, ChevronLeft, ChevronRight,
+  Calendar, ChevronLeft, ChevronRight, FolderOpen,
 } from "lucide-react";
 
 type FilterType = "all" | "link" | "note";
@@ -18,6 +19,7 @@ interface ItemFeedProps {
   teamId: string;
   totalCount: number;
   onAddClick?: () => void;
+  collections?: Collection[];
 }
 
 function sortItems(items: ExtendedItem[]) {
@@ -110,9 +112,12 @@ export default function ItemFeed({
   teamId,
   totalCount,
   onAddClick,
+  collections,
 }: ItemFeedProps) {
   const [filter, setFilter] = useState<FilterType>("all");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<ItemCategory | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customRange, setCustomRange] = useState<{ from: string; to: string } | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -137,18 +142,26 @@ export default function ItemFeed({
     }
   }, [totalCount, initialItems]);
 
-  // 필터 파이프라인: 타입 -> 태그 -> 날짜
+  // 필터 파이프라인: 타입 -> 태그 -> 날짜 -> 컬렉션 -> 카테고리
   const typeFiltered = filter === "all" ? items : items.filter((i) => i.type === filter);
   const tagFiltered = tagFilter
     ? typeFiltered.filter((i) => i.tags?.some((t) => t.name === tagFilter))
     : typeFiltered;
-  const filtered = filterByDate(tagFiltered, dateFilter, customRange);
+  const dateFiltered = filterByDate(tagFiltered, dateFilter, customRange);
+  const collectionFiltered = collectionFilter
+    ? dateFiltered.filter((i) => i.collection_id === collectionFilter)
+    : dateFiltered;
+  const filtered = categoryFilter
+    ? collectionFiltered.filter((i) => i.category === categoryFilter)
+    : collectionFiltered;
 
   const linkCount = items.filter((i) => i.type === "link").length;
   const noteCount = items.filter((i) => i.type === "note").length;
 
   const hasMore =
-    teamId !== "all" && filter === "all" && !tagFilter && dateFilter === "all" && items.length < totalCount;
+    teamId !== "all" && filter === "all" && !tagFilter &&
+    dateFilter === "all" && !collectionFilter && !categoryFilter &&
+    items.length < totalCount;
 
   const handleLoadMore = useCallback(() => {
     if (isLoadingRef.current || !hasMore) return;
@@ -271,7 +284,75 @@ export default function ItemFeed({
           </button>
         </div>
 
-        {/* 2행: 날짜 필터 탭 */}
+        {/* 2행: 컬렉션 필터 */}
+        {collections && collections.length > 0 && (
+          <div className="flex gap-1.5 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <button
+              onClick={() => setCollectionFilter(null)}
+              className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                collectionFilter === null
+                  ? "bg-violet-600 text-white"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+              }`}
+            >
+              전체
+            </button>
+            {collections.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setCollectionFilter((prev) => (prev === c.id ? null : c.id))}
+                className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  collectionFilter === c.id
+                    ? "bg-violet-600 text-white"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                }`}
+              >
+                <FolderOpen className="w-3 h-3" />
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 3행: 카테고리 필터 */}
+        {(() => {
+          const present = [...new Set(
+            items.map((i) => i.category).filter(Boolean)
+          )] as ItemCategory[];
+          if (present.length === 0) return null;
+          return (
+            <div className="flex gap-1.5 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              <button
+                onClick={() => setCategoryFilter(null)}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  categoryFilter === null
+                    ? "bg-zinc-900 text-white"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                }`}
+              >
+                전체
+              </button>
+              {present.map((cat) => {
+                const colors = ITEM_CATEGORY_COLORS[cat];
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter((prev) => prev === cat ? null : cat)}
+                    className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      categoryFilter === cat
+                        ? `${colors.bg} ${colors.text} ring-1 ring-current`
+                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                    }`}
+                  >
+                    {ITEM_CATEGORY_LABELS[cat]}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* 4행: 날짜 필터 탭 */}
         <div className="flex items-center gap-1 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           {(["all", "today", "week", "month"] as const).map((d) => (
             <button
@@ -440,7 +521,7 @@ export default function ItemFeed({
             <div className="space-y-1">
               <p className="text-xs font-medium text-amber-500 px-0.5">고정됨</p>
               {filtered.filter((i) => i.is_pinned).map((item) => (
-                <ItemCard key={item.id} item={item} onTagClick={handleTagClick} />
+                <ItemCard key={item.id} item={item} onTagClick={handleTagClick} collections={collections} />
               ))}
             </div>
           )}
@@ -449,7 +530,7 @@ export default function ItemFeed({
             <div key={group.label} className="space-y-1">
               <p className="text-xs font-medium text-zinc-400 px-0.5">{group.label}</p>
               {group.items.map((item) => (
-                <ItemCard key={item.id} item={item} onTagClick={handleTagClick} />
+                <ItemCard key={item.id} item={item} onTagClick={handleTagClick} collections={collections} />
               ))}
             </div>
           ))}

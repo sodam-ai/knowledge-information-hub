@@ -3,12 +3,13 @@
 import { useState, useActionState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createItem } from "@/actions/items";
+import { getCollections } from "@/actions/collections";
 import { useToast } from "@/components/ui/toast";
 import {
   Plus, Link2, FileText, X, AlertCircle, Info,
   Loader2, Sparkles, Clipboard,
 } from "lucide-react";
-import type { ActionResult, Item } from "@/types";
+import type { ActionResult, Item, Collection } from "@/types";
 
 interface SaveItemButtonProps {
   teamId: string;
@@ -111,6 +112,7 @@ export default function SaveItemButton({
   const [activeTab, setActiveTab] = useState<"link" | "note">("link");
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [titleFailed, setTitleFailed] = useState(false);
+  const [saveCollections, setSaveCollections] = useState<Collection[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
 
   // ── OG 미리보기 상태 ──────────────────────────────────────────────────────
@@ -162,8 +164,11 @@ export default function SaveItemButton({
       setTitleOverride("");
       setDuplicateWarning(null);
       setTitleFailed(false);
+      getCollections(teamId).then((res) => { if (res.data) setSaveCollections(res.data); });
+    } else {
+      setSaveCollections([]);
     }
-  }, [open, prefillUrl]);
+  }, [open, prefillUrl, teamId]);
 
   // ── 열기 — 클립보드 URL 자동 감지 ────────────────────────────────────────
   const handleOpen = useCallback(async () => {
@@ -401,6 +406,23 @@ export default function SaveItemButton({
             className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
           />
         </div>
+
+        {saveCollections.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-zinc-600">
+              컬렉션 <span className="text-zinc-400 font-normal">(선택)</span>
+            </label>
+            <select
+              name="collection_id"
+              className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+            >
+              <option value="">없음</option>
+              {saveCollections.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="flex gap-2 pt-1 pb-1 sm:pb-2">
           <button

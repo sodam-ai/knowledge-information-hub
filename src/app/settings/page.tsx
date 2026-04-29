@@ -2,10 +2,11 @@
 
 import { useActionState, useEffect, useState, Suspense } from "react";
 import { updateTeam, regenerateInviteCode, getTeamInfo } from "@/actions/teams";
-import type { ActionResult, Team } from "@/types";
+import { getCollections, createCollection, deleteCollection } from "@/actions/collections";
+import type { ActionResult, Team, Collection } from "@/types";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Copy, Check, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Copy, Check, RefreshCw, SlidersHorizontal, Trash2, Plus } from "lucide-react";
 
 const initialSaveState: ActionResult<boolean> = {};
 const initialInviteState: ActionResult<string> = {};
@@ -18,6 +19,8 @@ function SettingsContent() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!teamId) { setLoadError("그룹 ID가 없습니다."); return; }
@@ -27,6 +30,9 @@ function SettingsContent() {
         setTeam(res.data);
         setInviteCode(res.data.invite_code ?? "");
       }
+    });
+    getCollections(teamId).then((res) => {
+      if (res.data) setCollections(res.data);
     });
   }, [teamId]);
 
@@ -61,6 +67,25 @@ function SettingsContent() {
       setTimeout(() => setCopied(false), 2000);
     });
   };
+
+  const [createColState, createColAction, createColPending] = useActionState(
+    async (_: ActionResult<Collection>, formData: FormData): Promise<ActionResult<Collection>> => {
+      const name = formData.get("collection_name") as string;
+      const result = await createCollection(teamId, name);
+      if (result.error) return result;
+      if (result.data) setCollections((prev) => [...prev, result.data!]);
+      return {};
+    },
+    {} as ActionResult<Collection>
+  );
+
+  async function handleDeleteCollection(collectionId: string) {
+    if (!confirm("컬렉션을 삭제할까요? 아이템은 그대로 유지됩니다.")) return;
+    setDeletingId(collectionId);
+    const result = await deleteCollection(collectionId);
+    if (!result.error) setCollections((prev) => prev.filter((c) => c.id !== collectionId));
+    setDeletingId(null);
+  }
 
   if (loadError) {
     return (
@@ -168,6 +193,55 @@ function SettingsContent() {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${regenPending ? "animate-spin" : ""}`} />
               {regenPending ? "재발급 중..." : "새 코드 발급"}
+            </button>
+          </form>
+        </div>
+
+        {/* 섹션 3: 컬렉션 관리 */}
+        <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6">
+          <h2 className="text-sm font-semibold text-zinc-900 mb-1">컬렉션 관리</h2>
+          <p className="text-xs text-zinc-400 mb-4">아이템을 폴더처럼 묶어 분류할 수 있습니다</p>
+
+          {createColState.error && (
+            <div className="mb-3 p-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl text-center">
+              {createColState.error}
+            </div>
+          )}
+
+          {collections.length > 0 && (
+            <ul className="space-y-1.5 mb-4">
+              {collections.map((c) => (
+                <li key={c.id} className="flex items-center justify-between px-3 py-2 bg-zinc-50 rounded-xl">
+                  <span className="text-sm text-zinc-800 truncate">{c.name}</span>
+                  <button
+                    onClick={() => handleDeleteCollection(c.id)}
+                    disabled={deletingId === c.id}
+                    className="p-1 text-zinc-400 hover:text-red-500 transition-colors disabled:opacity-40 flex-shrink-0"
+                    title="삭제"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form action={createColAction} className="flex gap-2">
+            <input
+              type="text"
+              name="collection_name"
+              placeholder="새 컬렉션 이름 (최대 50자)"
+              maxLength={50}
+              required
+              className="flex-1 px-3 py-2 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent bg-zinc-50"
+            />
+            <button
+              type="submit"
+              disabled={createColPending || !team}
+              className="flex items-center gap-1 px-3 py-2 bg-zinc-900 text-white text-sm font-medium rounded-xl hover:bg-zinc-800 disabled:opacity-50 transition-colors flex-shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              추가
             </button>
           </form>
         </div>

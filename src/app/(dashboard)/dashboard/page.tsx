@@ -5,7 +5,7 @@ import SearchBar from "@/components/items/SearchBar";
 import TeamHeader from "@/components/layout/TeamHeader";
 import Link from "next/link";
 import { Plus, Settings } from "lucide-react";
-import type { Team, ItemType } from "@/types";
+import type { Team, ItemType, Collection, ItemCategory } from "@/types";
 
 export default async function DashboardPage({
   searchParams,
@@ -70,6 +70,7 @@ export default async function DashboardPage({
     file_mime: string | null;
     thumbnail_url: string | null;
     collection_id: string | null;
+    category: ItemCategory | null;
     is_pinned: boolean;
     view_count: number;
     team_id: string;
@@ -127,6 +128,16 @@ export default async function DashboardPage({
       : undefined,
   }));
 
+  let collections: Collection[] = [];
+  if (!viewAll) {
+    const { data: collectionsData } = await db
+      .from("collections")
+      .select("*")
+      .eq("team_id", activeTeam.id)
+      .order("created_at", { ascending: true });
+    collections = (collectionsData ?? []) as Collection[];
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50">
       <TeamHeader teams={allTeams} activeTeam={activeTeam} isAllView={viewAll} />
@@ -165,6 +176,7 @@ export default async function DashboardPage({
           initialItems={mappedItems}
           teamId={viewAll ? "all" : activeTeam.id}
           totalCount={viewAll ? mappedItems.length : totalCount}
+          collections={collections}
         />
       </main>
     </div>
