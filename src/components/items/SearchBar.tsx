@@ -62,7 +62,7 @@ export default function SearchBar({ teamId }: SearchBarProps) {
           type="search"
           value={query}
           onChange={(e) => handleSearch(e.target.value)}
-          placeholder={isAllFeed ? "전체 피드 검색... (제목, 내용, URL)" : "그룹 자료 검색... (제목, 내용, URL)"}
+          placeholder="제목, 내용, URL, #태그 검색..."
           className="w-full pl-9 pr-9 py-2.5 border border-zinc-200 rounded-xl text-sm bg-white text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
         />
         {query && (
@@ -94,7 +94,7 @@ export default function SearchBar({ teamId }: SearchBarProps) {
                 <p className="text-sm text-zinc-500">
                   &ldquo;{query}&rdquo;에 대한 결과가 없어요
                 </p>
-                <p className="text-xs text-zinc-400 mt-1">다른 키워드로 검색해보세요</p>
+                <p className="text-xs text-zinc-400 mt-1">#태그명으로 태그 검색도 가능해요</p>
               </div>
             )}
             {!isPending && results && results.length > 0 && (

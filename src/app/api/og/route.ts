@@ -69,7 +69,7 @@ function extractMeta(html: string): OgMeta {
 
 // ── Route Handler ──────────────────────────────────────────────────────────
 
-const TIMEOUT_MS = 3_000;
+const TIMEOUT_MS = 5_000;
 const MAX_BYTES  = 512 * 1_024; // 512 KB (head 영역으로 충분)
 
 export async function GET(req: NextRequest) {
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
     const res = await fetch(rawUrl, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; KnowledgeLinkHub-Bot/1.0)",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml;q=0.9",
         "Accept-Language": "ko,en;q=0.8",
       },

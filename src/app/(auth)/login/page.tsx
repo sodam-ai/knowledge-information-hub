@@ -19,7 +19,7 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Knowledge Link Hub</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Knowledge Information Hub</h1>
           <p className="mt-1.5 text-sm text-zinc-500">비밀번호를 입력하세요</p>
         </div>
 

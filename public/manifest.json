@@ -1,7 +1,7 @@
 {
-  "name": "TeamVault",
-  "short_name": "TeamVault",
-  "description": "소규모 팀의 지식 창고 — 링크·노트를 한 곳에 모으고 AI로 빠르게 찾기",
+  "name": "Knowledge Information Hub",
+  "short_name": "KIH",
+  "description": "그룹이 링크·노트를 한 곳에 모으고 AI로 빠르게 찾는 그룹 지식 창고",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

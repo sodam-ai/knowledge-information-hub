@@ -106,6 +106,13 @@ export async function changeViewPassword(
   return { data: true };
 }
 
+export async function verifyAdminAccess(password: string): Promise<ActionResult<boolean>> {
+  if (!password) return { error: "비밀번호를 입력해주세요." };
+  const ok = await verifyAdminPassword(password);
+  if (!ok) return { error: "관리자 비밀번호가 올바르지 않습니다." };
+  return { data: true };
+}
+
 export async function changeAdminPassword(
   _: ActionResult<boolean>,
   formData: FormData

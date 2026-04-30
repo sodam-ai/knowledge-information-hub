@@ -6,13 +6,13 @@ import { ToastProvider } from "@/components/ui/toast";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Knowledge Link Hub — 그룹 지식 창고",
+  title: "Knowledge Information Hub — 그룹 지식 창고",
   description: "그룹이 링크·노트를 한 곳에 모으고 AI로 빠르게 찾는 그룹 지식 창고",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Knowledge Link Hub",
+    title: "Knowledge Information Hub",
   },
 };
 

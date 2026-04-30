@@ -41,26 +41,41 @@ export type ItemCategory =
   | "reference"
   | "document"
   | "idea"
+  | "video"
+  | "code"
+  | "news"
+  | "design"
+  | "product"
   | "etc";
 
 export const ITEM_CATEGORY_LABELS: Record<ItemCategory, string> = {
-  article: "아티클 / 뉴스",
+  article:  "아티클",
   tutorial: "튜토리얼",
-  tool: "도구 / 서비스",
-  reference: "레퍼런스",
+  tool:     "도구 / 서비스",
+  reference:"레퍼런스",
   document: "문서 / PDF",
-  idea: "아이디어",
-  etc: "기타",
+  idea:     "아이디어",
+  video:    "영상 / 미디어",
+  code:     "코드 / 저장소",
+  news:     "뉴스",
+  design:   "디자인",
+  product:  "쇼핑 / 제품",
+  etc:      "기타",
 };
 
 export const ITEM_CATEGORY_COLORS: Record<ItemCategory, { bg: string; text: string }> = {
-  article:   { bg: "bg-blue-100",    text: "text-blue-700" },
-  tutorial:  { bg: "bg-amber-100",   text: "text-amber-700" },
-  tool:      { bg: "bg-emerald-100", text: "text-emerald-700" },
-  reference: { bg: "bg-sky-100",     text: "text-sky-700" },
-  document:  { bg: "bg-orange-100",  text: "text-orange-700" },
-  idea:      { bg: "bg-pink-100",    text: "text-pink-700" },
-  etc:       { bg: "bg-zinc-100",    text: "text-zinc-600" },
+  article:  { bg: "bg-blue-100",    text: "text-blue-700" },
+  tutorial: { bg: "bg-amber-100",   text: "text-amber-700" },
+  tool:     { bg: "bg-emerald-100", text: "text-emerald-700" },
+  reference:{ bg: "bg-sky-100",     text: "text-sky-700" },
+  document: { bg: "bg-orange-100",  text: "text-orange-700" },
+  idea:     { bg: "bg-pink-100",    text: "text-pink-700" },
+  video:    { bg: "bg-red-100",     text: "text-red-700" },
+  code:     { bg: "bg-violet-100",  text: "text-violet-700" },
+  news:     { bg: "bg-cyan-100",    text: "text-cyan-700" },
+  design:   { bg: "bg-fuchsia-100", text: "text-fuchsia-700" },
+  product:  { bg: "bg-teal-100",    text: "text-teal-700" },
+  etc:      { bg: "bg-zinc-100",    text: "text-zinc-600" },
 };
 
 export interface Team {

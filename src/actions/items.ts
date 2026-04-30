@@ -42,9 +42,19 @@ function detectItemCategory(type: string, url?: string | null): ItemCategory | n
   if (type === "note") return "idea";
   if (type === "link" && url) {
     const u = url.toLowerCase();
-    if (/github\.com|gitlab\.com|npmjs\.com|pypi\.org|hub\.docker\.com|vercel\.com|figma\.com|notion\.so|linear\.app/.test(u))
+    if (/youtube\.com\/watch|youtu\.be|vimeo\.com|twitch\.tv|bilibili\.com/.test(u))
+      return "video";
+    if (/github\.com|gitlab\.com|npmjs\.com|pypi\.org|hub\.docker\.com|codepen\.io|jsfiddle\.net|codesandbox\.io/.test(u))
+      return "code";
+    if (/figma\.com|dribbble\.com|behance\.net|unsplash\.com|framer\.com|canva\.com/.test(u))
+      return "design";
+    if (/amazon\.com|amazon\.co\.kr|coupang\.com|gmarket\.co\.kr|11st\.co\.kr|shopping\.naver|shop\./.test(u))
+      return "product";
+    if (/techcrunch\.com|theverge\.com|wired\.com|zdnet\.com|ycombinator\.com\/item|hnews\.|hacker-news\.|news\.ycombinator\.com/.test(u))
+      return "news";
+    if (/vercel\.com|notion\.so|linear\.app|slack\.com|airtable\.com|zapier\.com|make\.com/.test(u))
       return "tool";
-    if (/youtube\.com\/watch|youtu\.be|udemy\.com|coursera\.|\/tutorial|\/guide|learn\./.test(u))
+    if (/udemy\.com|coursera\.|\/tutorial|\/guide|learn\.|egghead\.io|frontendmasters\.com/.test(u))
       return "tutorial";
     if (/\bdocs\.|\/docs\/|developer\.|\.dev\/|mdn\.web|stackoverflow\.com|devdocs\.io/.test(u))
       return "reference";
@@ -55,11 +65,6 @@ function detectItemCategory(type: string, url?: string | null): ItemCategory | n
   return null;
 }
 
-function detectFileCategory(filename: string): ItemCategory | null {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  if (["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) return "document";
-  return null;
-}
 
 export async function createItem(
   teamId: string,
@@ -74,6 +79,13 @@ export async function createItem(
     ? rawTags.split(",").map((t) => t.trim()).filter(Boolean)
     : [];
   const collectionId = (formData.get("collection_id") as string | null) || null;
+
+  const rawCategory = formData.get("category") as string | null;
+  const VALID_CATEGORIES: ItemCategory[] = ["article", "tutorial", "tool", "reference", "document", "idea", "video", "code", "news", "design", "product", "etc"];
+  const userCategory: ItemCategory | null =
+    rawCategory && VALID_CATEGORIES.includes(rawCategory as ItemCategory)
+      ? (rawCategory as ItemCategory)
+      : null;
 
   if (type === "link") {
     const parsed = createLinkSchema.safeParse({
@@ -120,7 +132,8 @@ export async function createItem(
         team_id: teamId,
         created_by: null,
         collection_id: collectionId,
-        category: detectItemCategory("link", url),
+        category: userCategory ?? detectItemCategory("link", url),
+        content: (formData.get("content") as string | null)?.trim() || null,
       })
       .select()
       .single();
@@ -158,53 +171,12 @@ export async function createItem(
         team_id: teamId,
         created_by: null,
         collection_id: collectionId,
-        category: detectItemCategory("note"),
+        category: userCategory ?? detectItemCategory("note"),
       })
       .select()
       .single();
 
     if (error) return { error: "저장 중 오류가 발생했습니다." };
-
-    await attachTags(supabase, item.id, teamId, tagNames);
-    revalidatePath("/dashboard");
-    return { data: item };
-  }
-
-  if (type === "file") {
-    const file = formData.get("file") as File | null;
-    if (!file || file.size === 0) return { error: "파일을 선택해주세요." };
-    if (file.size > 50 * 1024 * 1024) return { error: "파일 크기는 50MB 이하여야 합니다." };
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const storagePath = `${teamId}/${Date.now()}_${safeName}`;
-
-    const { error: uploadErr } = await supabase.storage
-      .from("items")
-      .upload(storagePath, file, { contentType: file.type, upsert: false });
-
-    if (uploadErr) {
-      console.error("[createItem file] Storage 오류:", uploadErr.message);
-      return { error: "파일 업로드에 실패했습니다." };
-    }
-
-    const { data: { publicUrl } } = supabase.storage.from("items").getPublicUrl(storagePath);
-
-    const { data: item, error: insertErr } = await supabase
-      .from("items")
-      .insert({
-        type: "file",
-        title: file.name,
-        file_path: publicUrl,
-        file_mime: file.type || "application/octet-stream",
-        team_id: teamId,
-        created_by: null,
-        collection_id: collectionId,
-        category: detectFileCategory(file.name),
-      })
-      .select()
-      .single();
-
-    if (insertErr) return { error: "저장 중 오류가 발생했습니다." };
 
     await attachTags(supabase, item.id, teamId, tagNames);
     revalidatePath("/dashboard");
@@ -372,45 +344,87 @@ export async function togglePinItem(itemId: string): Promise<ActionResult<boolea
   return { data: newPinned };
 }
 
+type SearchItem = Item & { tags: { id: string; name: string; color: string | null; team_id: string }[] };
+type STagRow = { id: string; name: string; color: string | null; team_id: string };
+
+function normalizeItemRows(data: unknown[]): SearchItem[] {
+  const raw = data as (Item & { item_tags?: { tags: STagRow }[] })[];
+  return raw.map((item) => ({
+    ...item,
+    tags: (item.item_tags ?? []).map((it: { tags: STagRow }) => it.tags),
+  }));
+}
+
 export async function searchItems(
   teamId: string,
   query: string
-): Promise<ActionResult<(Item & { tags?: { id: string; name: string; color: string | null; team_id: string }[] })[]>> {
+): Promise<ActionResult<SearchItem[]>> {
   const supabase = createServiceClient();
 
-  if (query.length < 1) return { error: "검색어를 입력해주세요." };
-  if (query.length > 200) return { error: "검색어가 너무 깁니다." };
+  // Strip leading # for tag-prefix searches
+  const q = query.startsWith("#") ? query.slice(1).trim() : query.trim();
 
-  if (teamId === "all" || query.length < 2) {
-    let q = supabase
+  if (q.length < 1) return { error: "검색어를 입력해주세요." };
+  if (q.length > 200) return { error: "검색어가 너무 깁니다." };
+
+  async function fetchTagMatchItems(excludeIds: Set<string>): Promise<SearchItem[]> {
+    const { data: matchedTags } = await supabase
+      .from("tags")
+      .select("id")
+      .ilike("name", `%${q}%`)
+      .limit(20);
+    if (!matchedTags?.length) return [];
+
+    const tagIds = matchedTags.map((t: { id: string }) => t.id);
+    const { data: linkRows } = await supabase
+      .from("item_tags")
+      .select("item_id")
+      .in("tag_id", tagIds)
+      .limit(50);
+    if (!linkRows?.length) return [];
+
+    const newIds = ([...new Set(linkRows.map((r: { item_id: string }) => r.item_id))] as string[])
+      .filter((id) => !excludeIds.has(id))
+      .slice(0, 10);
+    if (!newIds.length) return [];
+
+    let tagQ = supabase
       .from("items")
       .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
       .eq("is_deleted", false)
-      .or(`title.ilike.%${query}%,content.ilike.%${query}%,url.ilike.%${query}%`)
+      .in("id", newIds)
+      .order("created_at", { ascending: false });
+    if (teamId !== "all") tagQ = tagQ.eq("team_id", teamId);
+    const { data } = await tagQ;
+    return normalizeItemRows(data ?? []);
+  }
+
+  if (teamId === "all" || q.length < 2) {
+    let dbQ = supabase
+      .from("items")
+      .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
+      .eq("is_deleted", false)
+      .or(`title.ilike.%${q}%,content.ilike.%${q}%,url.ilike.%${q}%`)
       .order("created_at", { ascending: false })
       .limit(20);
+    if (teamId !== "all") dbQ = dbQ.eq("team_id", teamId);
 
-    if (teamId !== "all") q = q.eq("team_id", teamId);
-
-    const { data, error } = await q;
+    const { data, error } = await dbQ;
     if (error) {
       console.error("[searchItems:ilike] 오류:", error.code);
       return { error: "검색 중 오류가 발생했습니다." };
     }
 
-    type STagRow = { id: string; name: string; color: string | null; team_id: string };
-    const rawSearch = (data ?? []) as unknown as (Item & { item_tags?: { tags: STagRow }[] })[];
-    const items = rawSearch.map((item) => ({
-      ...item,
-      tags: (item.item_tags ?? []).map((it: { tags: STagRow }) => it.tags),
-    }));
-    return { data: items };
+    const textItems = normalizeItemRows(data ?? []);
+    const textIds = new Set(textItems.map((i) => i.id));
+    const tagItems = await fetchTagMatchItems(textIds);
+    return { data: [...textItems, ...tagItems] };
   }
 
-  // 2자 이상 단일 그룹: pg_trgm similarity RPC
+  // 2자 이상, 특정 팀: pg_trgm similarity RPC
   const { data, error } = await supabase.rpc("search_items", {
     p_team_id: teamId,
-    p_query: query,
+    p_query: q,
   });
 
   if (error) {
@@ -418,5 +432,8 @@ export async function searchItems(
     return { error: "검색 중 오류가 발생했습니다." };
   }
 
-  return { data: data ?? [] };
+  const rpcItems = (data ?? []) as SearchItem[];
+  const rpcIds = new Set(rpcItems.map((i) => i.id));
+  const tagItems = await fetchTagMatchItems(rpcIds);
+  return { data: [...rpcItems, ...tagItems] };
 }

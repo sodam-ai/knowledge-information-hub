@@ -17,6 +17,7 @@ interface ItemCardProps {
   item: Item & { tags?: Tag[]; teamName?: string };
   onTagClick?: (tagName: string) => void;
   collections?: Collection[];
+  viewMode?: "list" | "grid" | "compact";
 }
 
 // ── 상세 시트 ──────────────────────────────────────────────────────────────────
@@ -132,6 +133,16 @@ function DetailSheet({ item, onClose, onEditClick, onDeleteClick }: DetailSheetP
               </a>
             )}
 
+            {/* 링크 메모 */}
+            {item.type === "link" && item.content && (
+              <div className="px-3 py-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                <p className="text-xs text-zinc-500 mb-1 font-medium">메모</p>
+                <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">
+                  {item.content}
+                </p>
+              </div>
+            )}
+
             {/* 파일 다운로드 */}
             {item.type === "file" && item.file_path && (
               <a
@@ -216,7 +227,7 @@ function DetailSheet({ item, onClose, onEditClick, onDeleteClick }: DetailSheetP
 
 // ── 메인 카드 ──────────────────────────────────────────────────────────────────
 
-export default function ItemCard({ item: initialItem, onTagClick, collections }: ItemCardProps) {
+export default function ItemCard({ item: initialItem, onTagClick, collections, viewMode = "list" }: ItemCardProps) {
   const [item, setItem] = useState(initialItem);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
@@ -333,6 +344,112 @@ export default function ItemCard({ item: initialItem, onTagClick, collections }:
     if (item.url) hostname = new URL(item.url).hostname.replace(/^www\./, "");
   } catch {
     hostname = "";
+  }
+
+  if (viewMode === "compact" && !isEditing) {
+    return (
+      <>
+        <article
+          onClick={handleCardClick}
+          className={`group bg-white rounded-md border cursor-pointer select-none transition-all duration-150 ${
+            item.is_pinned
+              ? "border-amber-200"
+              : "border-zinc-100 hover:border-zinc-200"
+          }`}
+        >
+          <div className="px-2.5 py-1.5 flex items-center gap-1.5 min-w-0">
+            {item.type === "link" ? (
+              <Link2 className="w-3 h-3 text-blue-400 flex-shrink-0" />
+            ) : item.type === "file" ? (
+              <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+            ) : (
+              <FileText className="w-3 h-3 text-amber-400 flex-shrink-0" />
+            )}
+            {item.is_pinned && <Pin className="w-2.5 h-2.5 text-amber-400 flex-shrink-0" />}
+            <span className="text-xs text-zinc-800 truncate flex-1 min-w-0">{item.title}</span>
+            {item.category && (() => {
+              const colors = ITEM_CATEGORY_COLORS[item.category];
+              return (
+                <span className={`inline-flex items-center text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${colors.bg} ${colors.text}`}>
+                  {ITEM_CATEGORY_LABELS[item.category]}
+                </span>
+              );
+            })()}
+            <span className="text-xs text-zinc-400 flex-shrink-0 ml-1">{formatDate(item.created_at)}</span>
+          </div>
+        </article>
+        {showDetail && (
+          <DetailSheet
+            item={item}
+            onClose={() => setShowDetail(false)}
+            onEditClick={() => handleEditOpen()}
+            onDeleteClick={handleDelete}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (viewMode === "grid" && !isEditing) {
+    return (
+      <>
+        <article
+          onClick={handleCardClick}
+          className={`group bg-white rounded-xl border transition-all duration-150 cursor-pointer select-none overflow-hidden ${
+            item.is_pinned ? "border-amber-200 shadow-sm" : "border-zinc-200 hover:border-zinc-300 hover:shadow-sm"
+          }`}
+        >
+          <div className="h-20 bg-zinc-100 flex items-center justify-center overflow-hidden relative">
+            {item.type === "link" && item.thumbnail_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.thumbnail_url}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : item.type === "link" ? (
+              <Link2 className="w-7 h-7 text-blue-300" />
+            ) : item.type === "file" ? (
+              <Paperclip className="w-7 h-7 text-emerald-300" />
+            ) : (
+              <FileText className="w-7 h-7 text-amber-300" />
+            )}
+            {item.is_pinned && (
+              <div className="absolute top-1.5 left-1.5">
+                <Pin className="w-3 h-3 text-amber-400" />
+              </div>
+            )}
+          </div>
+          <div className="px-2.5 py-2">
+            <h3 className="text-xs font-medium text-zinc-900 line-clamp-2 leading-snug mb-1">
+              {item.title}
+            </h3>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-xs text-zinc-400 truncate">
+                {item.type === "link" && hostname ? hostname : formatDate(item.created_at)}
+              </span>
+              {item.category && (() => {
+                const colors = ITEM_CATEGORY_COLORS[item.category];
+                return (
+                  <span className={`inline-flex items-center text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${colors.bg} ${colors.text}`}>
+                    {ITEM_CATEGORY_LABELS[item.category]}
+                  </span>
+                );
+              })()}
+            </div>
+          </div>
+        </article>
+        {showDetail && (
+          <DetailSheet
+            item={item}
+            onClose={() => setShowDetail(false)}
+            onEditClick={() => handleEditOpen()}
+            onDeleteClick={handleDelete}
+          />
+        )}
+      </>
+    );
   }
 
   return (

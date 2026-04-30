@@ -6,10 +6,11 @@ import { createItem } from "@/actions/items";
 import { getCollections } from "@/actions/collections";
 import { useToast } from "@/components/ui/toast";
 import {
-  Plus, Link2, FileText, Upload, X, AlertCircle, Info,
-  Loader2, Sparkles, Clipboard, Paperclip,
+  Plus, Link2, FileText, X, AlertCircle, Info,
+  Loader2, Sparkles, Clipboard,
 } from "lucide-react";
-import type { ActionResult, Item, Collection } from "@/types";
+import type { ActionResult, Item, Collection, ItemCategory } from "@/types";
+import { ITEM_CATEGORY_LABELS } from "@/types";
 
 interface SaveItemButtonProps {
   teamId: string;
@@ -35,6 +36,20 @@ function isValidHttpsUrl(s: string): boolean {
 }
 
 const initialState: ActionResult<Item> = {};
+
+function extractTagKeywords(og: OgMeta): string[] {
+  const combined = `${og.title ?? ""} ${og.description ?? ""}`;
+  const tokens = combined
+    .split(/[\s\-_|·•,.:;!?'"()\[\]{}\/\\]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && t.length <= 20);
+  const stopWords = new Set(["the", "and", "for", "with", "from", "are", "was", "has", "not", "you", "our", "can", "this", "that", "how", "what", "get", "its", "all", "more", "your"]);
+  const seen = new Set<string>();
+  return tokens
+    .filter((t) => !stopWords.has(t.toLowerCase()))
+    .filter((t) => { const l = t.toLowerCase(); if (seen.has(l)) return false; seen.add(l); return true; })
+    .slice(0, 6);
+}
 
 // ── Dialog (분리된 컴포넌트 — 마운트 시 슬라이드 애니메이션 트리거) ──────────
 interface DialogProps {
@@ -76,7 +91,7 @@ function BottomSheetDialog({ onClose, children }: DialogProps) {
         <div
           className={`
             bg-white shadow-2xl overflow-y-auto
-            rounded-t-2xl max-h-[92vh]
+            rounded-t-2xl max-h-[92dvh]
             sm:rounded-2xl sm:border sm:border-zinc-200 sm:max-h-[85vh] sm:shadow-xl
             transition-transform duration-300 ease-out
             sm:transition-none sm:translate-y-0
@@ -109,8 +124,7 @@ export default function SaveItemButton({
 
   const router = useRouter();
   const { success, warning } = useToast();
-  const [activeTab, setActiveTab] = useState<"link" | "note" | "file">("link");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [activeTab, setActiveTab] = useState<"link" | "note">("link");
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [titleFailed, setTitleFailed] = useState(false);
   const [saveCollections, setSaveCollections] = useState<Collection[]>([]);
@@ -122,6 +136,7 @@ export default function SaveItemButton({
   const [ogLoading, setOgLoading] = useState(false);
   const [titleOverride, setTitleOverride] = useState("");
   const [clipboardHint, setClipboardHint] = useState(false);
+  const [tagsValue, setTagsValue] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchOg = useCallback(async (url: string) => {
@@ -165,11 +180,10 @@ export default function SaveItemButton({
       setTitleOverride("");
       setDuplicateWarning(null);
       setTitleFailed(false);
-      setSelectedFile(null);
+      setTagsValue("");
       getCollections(teamId).then((res) => { if (res.data) setSaveCollections(res.data); });
     } else {
       setSaveCollections([]);
-      setSelectedFile(null);
     }
   }, [open, prefillUrl, teamId]);
 
@@ -199,8 +213,10 @@ export default function SaveItemButton({
       const result = await boundAction(prev, formData);
 
       if (result.error === "title_failed") {
-        setTitleFailed(true);
-        warning("제목 자동 추출에 실패했어요. 직접 수정해보세요.");
+        formRef.current?.reset();
+        setOpen(false);
+        router.refresh();
+        warning("저장됐어요 — 제목 자동 추출 실패, 직접 수정해보세요.");
         return {};
       }
       if (result.error?.startsWith("duplicate:")) {
@@ -217,6 +233,15 @@ export default function SaveItemButton({
     },
     initialState
   );
+
+  const suggestedTags = ogMeta ? extractTagKeywords(ogMeta) : [];
+
+  function addSuggestedTag(tag: string) {
+    const current = tagsValue.split(",").map((t) => t.trim()).filter(Boolean);
+    if (!current.includes(tag)) {
+      setTagsValue(current.length > 0 ? `${tagsValue.trimEnd()}, ${tag}` : tag);
+    }
+  }
 
   // ── 닫힌 상태: 버튼만 ─────────────────────────────────────────────────────
   if (!open) {
@@ -248,7 +273,7 @@ export default function SaveItemButton({
 
       {/* 탭 */}
       <div className="flex gap-0 mt-4 mx-5 bg-zinc-100 rounded-xl p-1">
-        {(["link", "note", "file"] as const).map((tab) => (
+        {(["link", "note"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -260,10 +285,8 @@ export default function SaveItemButton({
           >
             {tab === "link" ? (
               <><Link2 className="w-3.5 h-3.5" /> 링크</>
-            ) : tab === "note" ? (
-              <><FileText className="w-3.5 h-3.5" /> 노트</>
             ) : (
-              <><Upload className="w-3.5 h-3.5" /> 파일</>
+              <><FileText className="w-3.5 h-3.5" /> 노트</>
             )}
           </button>
         ))}
@@ -367,8 +390,22 @@ export default function SaveItemButton({
               </div>
             )}
             <input type="hidden" name="og_image" value={ogMeta?.image ?? ""} />
+
+            {/* 메모 (선택) */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-zinc-600">
+                메모 <span className="text-zinc-400 font-normal">(선택)</span>
+              </label>
+              <textarea
+                name="content"
+                placeholder="이 링크에 대한 개인 메모..."
+                rows={2}
+                maxLength={2000}
+                className="w-full px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-xl resize-none placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:border-zinc-400 transition-colors"
+              />
+            </div>
           </div>
-        ) : activeTab === "note" ? (
+        ) : (
           <>
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-zinc-600">
@@ -397,35 +434,23 @@ export default function SaveItemButton({
               />
             </div>
           </>
-        ) : (
-          <div className="space-y-2.5">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-zinc-600">
-                파일 <span className="text-red-400">*</span>
-              </label>
-              <label className="flex flex-col items-center justify-center gap-2 w-full h-28 border-2 border-dashed border-zinc-200 rounded-xl cursor-pointer hover:border-zinc-400 hover:bg-zinc-50 transition-colors">
-                <Upload className="w-6 h-6 text-zinc-300" />
-                <span className="text-xs text-zinc-400">클릭하여 파일 선택</span>
-                <span className="text-xs text-zinc-300">최대 50MB</span>
-                <input
-                  type="file"
-                  name="file"
-                  className="sr-only"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              {selectedFile && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50 border border-zinc-100 rounded-xl">
-                  <Paperclip className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                  <span className="text-xs text-zinc-700 truncate flex-1 min-w-0">{selectedFile.name}</span>
-                  <span className="text-xs text-zinc-400 flex-shrink-0">
-                    {(selectedFile.size / 1024 / 1024).toFixed(1)}MB
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
         )}
+
+        {/* 카테고리 */}
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-zinc-600">카테고리</label>
+          <select
+            key={activeTab}
+            name="category"
+            defaultValue={activeTab === "note" ? "idea" : ""}
+            className="w-full px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:border-zinc-400 transition-colors appearance-none"
+          >
+            <option value="">자동 감지</option>
+            {(Object.entries(ITEM_CATEGORY_LABELS) as [ItemCategory, string][]).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
+        </div>
 
         <div className="space-y-1.5">
           <label className="block text-xs font-medium text-zinc-600">
@@ -435,9 +460,26 @@ export default function SaveItemButton({
           <input
             name="tags"
             type="text"
+            value={tagsValue}
+            onChange={(e) => setTagsValue(e.target.value)}
             placeholder="AI, 디자인, 참고자료"
             className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
           />
+          {activeTab === "link" && suggestedTags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {suggestedTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => addSuggestedTag(tag)}
+                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+                >
+                  <Plus className="w-2.5 h-2.5" />
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {saveCollections.length > 0 && (

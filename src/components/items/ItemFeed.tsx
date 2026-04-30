@@ -1,17 +1,19 @@
 "use client";
 
 import { useState, useTransition, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import ItemCard from "./ItemCard";
 import { getMoreItems } from "@/actions/items";
 import type { Item, Tag, Collection, ItemCategory } from "@/types";
 import { ITEM_CATEGORY_LABELS, ITEM_CATEGORY_COLORS } from "@/types";
 import {
-  Inbox, Plus, Loader2, Link2, FileText, Paperclip, Tag as TagIcon, X,
-  Calendar, ChevronLeft, ChevronRight, FolderOpen,
+  Inbox, Plus, Loader2, Link2, FileText, Tag as TagIcon, X,
+  Calendar, ChevronLeft, ChevronRight, FolderOpen, LayoutList, LayoutGrid,
+  AlignJustify, ChevronDown,
 } from "lucide-react";
 
-type FilterType = "all" | "link" | "note" | "file";
-type DateFilter = "all" | "today" | "week" | "month" | "custom";
+type FilterType = "all" | "link" | "note";
+type DateFilter = "all" | "today" | "yesterday" | "3days" | "week" | "month" | "3months" | "custom";
 type ExtendedItem = Item & { tags?: Tag[]; teamName?: string };
 
 interface ItemFeedProps {
@@ -39,15 +41,25 @@ function filterByDate(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   if (df === "today") return items.filter((i) => new Date(i.created_at) >= today);
+  if (df === "yesterday") {
+    const yStart = new Date(today); yStart.setDate(today.getDate() - 1);
+    return items.filter((i) => { const d = new Date(i.created_at); return d >= yStart && d < today; });
+  }
+  if (df === "3days") {
+    const d3 = new Date(today); d3.setDate(today.getDate() - 2);
+    return items.filter((i) => new Date(i.created_at) >= d3);
+  }
   if (df === "week") {
-    const w = new Date(today);
-    w.setDate(today.getDate() - 6);
+    const w = new Date(today); w.setDate(today.getDate() - 6);
     return items.filter((i) => new Date(i.created_at) >= w);
   }
   if (df === "month") {
-    const m = new Date(today);
-    m.setDate(today.getDate() - 29);
+    const m = new Date(today); m.setDate(today.getDate() - 29);
     return items.filter((i) => new Date(i.created_at) >= m);
+  }
+  if (df === "3months") {
+    const m3 = new Date(today); m3.setDate(today.getDate() - 89);
+    return items.filter((i) => new Date(i.created_at) >= m3);
   }
   if (df === "custom" && range) {
     const from = new Date(range.from);
@@ -126,6 +138,41 @@ export default function ItemFeed({
   const [pickStep, setPickStep] = useState<"from" | "to">("from");
   const [tempFrom, setTempFrom] = useState<string | null>(null);
 
+  const [viewMode, setViewMode] = useState<"list" | "grid" | "compact">("list");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "alpha" | "type">("newest");
+
+  const filterBarRef = useRef<HTMLDivElement>(null);
+  const [calendarPos, setCalendarPos] = useState<{ top: number; left: number; right: number } | null>(null);
+
+  useEffect(() => {
+    const savedMode = localStorage.getItem("kih-view-mode");
+    const savedSort = localStorage.getItem("kih-sort-order");
+    if (savedMode === "list" || savedMode === "grid" || savedMode === "compact") setViewMode(savedMode);
+    if (savedSort === "newest" || savedSort === "oldest" || savedSort === "alpha" || savedSort === "type") setSortOrder(savedSort);
+  }, []);
+
+  useEffect(() => {
+    if (!showCalendar) return;
+    const rect = filterBarRef.current?.getBoundingClientRect();
+    if (rect) {
+      setCalendarPos({
+        top: rect.bottom + 4,
+        left: rect.left + 16,
+        right: window.innerWidth - rect.right + 16,
+      });
+    }
+  }, [showCalendar]);
+
+  function handleViewMode(mode: "list" | "grid" | "compact") {
+    setViewMode(mode);
+    localStorage.setItem("kih-view-mode", mode);
+  }
+
+  function handleSortOrder(order: "newest" | "oldest" | "alpha" | "type") {
+    setSortOrder(order);
+    localStorage.setItem("kih-sort-order", order);
+  }
+
   const [items, setItems] = useState(sortItems(initialItems));
   const [, startTransition] = useTransition();
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -155,9 +202,15 @@ export default function ItemFeed({
     ? collectionFiltered.filter((i) => i.category === categoryFilter)
     : collectionFiltered;
 
+  const nonPinnedItems = filtered.filter((i) => !i.is_pinned);
+  const sortedNonPinned = (() => {
+    if (sortOrder === "oldest") return [...nonPinnedItems].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    if (sortOrder === "alpha") return [...nonPinnedItems].sort((a, b) => a.title.localeCompare(b.title, "ko"));
+    return nonPinnedItems;
+  })();
+
   const linkCount = items.filter((i) => i.type === "link").length;
   const noteCount = items.filter((i) => i.type === "note").length;
-  const fileCount = items.filter((i) => i.type === "file").length;
 
   const hasMore =
     teamId !== "all" && filter === "all" && !tagFilter &&
@@ -253,7 +306,53 @@ export default function ItemFeed({
   return (
     <div className="space-y-3">
       {/* 필터 영역 — sticky (TeamHeader h-14 아래) */}
-      <div className="sticky top-14 z-20 -mx-4 px-4 pt-1 pb-2 bg-zinc-50/90 backdrop-blur-sm">
+      <div ref={filterBarRef} className="sticky top-14 z-20 -mx-4 px-4 pt-1 pb-2 bg-zinc-50/90 backdrop-blur-sm">
+
+        {/* 0행: 뷰 모드 + 정렬 */}
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex gap-0.5">
+            <button
+              onClick={() => handleViewMode("list")}
+              className={`p-1.5 rounded-lg transition-colors ${
+                viewMode === "list" ? "bg-zinc-200 text-zinc-900" : "text-zinc-400 hover:text-zinc-600"
+              }`}
+              title="목록 보기"
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleViewMode("compact")}
+              className={`p-1.5 rounded-lg transition-colors ${
+                viewMode === "compact" ? "bg-zinc-200 text-zinc-900" : "text-zinc-400 hover:text-zinc-600"
+              }`}
+              title="컴팩트 보기"
+            >
+              <AlignJustify className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleViewMode("grid")}
+              className={`p-1.5 rounded-lg transition-colors ${
+                viewMode === "grid" ? "bg-zinc-200 text-zinc-900" : "text-zinc-400 hover:text-zinc-600"
+              }`}
+              title="그리드 보기"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="relative">
+            <select
+              value={sortOrder}
+              onChange={(e) => handleSortOrder(e.target.value as "newest" | "oldest" | "alpha" | "type")}
+              className="pl-2 pr-6 py-1 text-xs text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200 rounded-lg transition-colors appearance-none cursor-pointer bg-transparent border-0 outline-none"
+            >
+              <option value="newest">최신순</option>
+              <option value="oldest">오래된순</option>
+              <option value="alpha">이름순</option>
+              <option value="type">유형별</option>
+            </select>
+            <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-400 pointer-events-none" />
+          </div>
+        </div>
 
         {/* 1행: 타입 필터 탭 */}
         <div className="flex items-center gap-1 bg-zinc-100/80 rounded-xl p-1">
@@ -282,15 +381,6 @@ export default function ItemFeed({
           >
             <FileText className="w-3 h-3" />
             노트 {noteCount}
-          </button>
-          <button
-            onClick={() => setFilter("file")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 ${
-              filter === "file" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-            }`}
-          >
-            <Paperclip className="w-3 h-3" />
-            파일 {fileCount}
           </button>
         </div>
 
@@ -324,47 +414,47 @@ export default function ItemFeed({
           </div>
         )}
 
-        {/* 3행: 카테고리 필터 */}
-        {(() => {
-          const present = [...new Set(
-            items.map((i) => i.category).filter(Boolean)
-          )] as ItemCategory[];
-          if (present.length === 0) return null;
-          return (
-            <div className="flex gap-1.5 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-              <button
-                onClick={() => setCategoryFilter(null)}
-                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  categoryFilter === null
-                    ? "bg-zinc-900 text-white"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                }`}
-              >
-                전체
-              </button>
-              {present.map((cat) => {
-                const colors = ITEM_CATEGORY_COLORS[cat];
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setCategoryFilter((prev) => prev === cat ? null : cat)}
-                    className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      categoryFilter === cat
-                        ? `${colors.bg} ${colors.text} ring-1 ring-current`
-                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                    }`}
-                  >
-                    {ITEM_CATEGORY_LABELS[cat]}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })()}
+        {/* 3행: 카테고리 필터 — 12개 전체 항시 표시, 개수 뱃지, 빈 항목 비활성 */}
+        {items.some((i) => i.category) && (
+          <div className="flex gap-1.5 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <button
+              onClick={() => setCategoryFilter(null)}
+              className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                categoryFilter === null
+                  ? "bg-zinc-900 text-white"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+              }`}
+            >
+              전체 {items.length}
+            </button>
+            {(Object.keys(ITEM_CATEGORY_LABELS) as ItemCategory[]).map((cat) => {
+              const count = items.filter((i) => i.category === cat).length;
+              const colors = ITEM_CATEGORY_COLORS[cat];
+              const isEmpty = count === 0;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => { if (!isEmpty) setCategoryFilter((prev) => prev === cat ? null : cat); }}
+                  disabled={isEmpty}
+                  className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    isEmpty
+                      ? "bg-zinc-50 text-zinc-300 cursor-default"
+                      : categoryFilter === cat
+                      ? `${colors.bg} ${colors.text} ring-1 ring-current`
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  }`}
+                >
+                  {ITEM_CATEGORY_LABELS[cat]}
+                  {!isEmpty && <span className="text-[10px] opacity-60">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* 4행: 날짜 필터 탭 */}
         <div className="flex items-center gap-1 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-          {(["all", "today", "week", "month"] as const).map((d) => (
+          {(["all", "today", "yesterday", "3days", "week", "month", "3months"] as const).map((d) => (
             <button
               key={d}
               onClick={() => {
@@ -379,7 +469,7 @@ export default function ItemFeed({
                   : "text-zinc-500 hover:bg-zinc-200"
               }`}
             >
-              {d === "all" ? "전체" : d === "today" ? "오늘" : d === "week" ? "이번 주" : "이번 달"}
+              {d === "all" ? "전체" : d === "today" ? "오늘" : d === "yesterday" ? "어제" : d === "3days" ? "3일" : d === "week" ? "7일" : d === "month" ? "30일" : "90일"}
             </button>
           ))}
 
@@ -411,92 +501,6 @@ export default function ItemFeed({
           </button>
         </div>
 
-        {/* 달력 드롭다운 */}
-        {showCalendar && (
-          <>
-            <div
-              className="fixed inset-0 z-10"
-              onClick={() => {
-                setShowCalendar(false);
-                setPickStep("from");
-                setTempFrom(null);
-              }}
-            />
-            <div className="absolute left-4 right-4 mt-1.5 bg-white border border-zinc-200 rounded-2xl shadow-lg z-20 p-3">
-              {/* 달력 헤더 */}
-              <div className="flex items-center justify-between mb-2">
-                <button
-                  onClick={() => {
-                    if (calMonth === 0) { setCalMonth(11); setCalYear((y) => y - 1); }
-                    else setCalMonth((m) => m - 1);
-                  }}
-                  className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-500"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="text-xs font-semibold text-zinc-900">
-                  {calYear}년 {MONTH_NAMES[calMonth]}
-                </span>
-                <button
-                  onClick={() => {
-                    if (calMonth === 11) { setCalMonth(0); setCalYear((y) => y + 1); }
-                    else setCalMonth((m) => m + 1);
-                  }}
-                  className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-500"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              <p className="text-center text-xs text-zinc-400 mb-2">
-                {pickStep === "from" ? "시작 날짜를 선택하세요" : "종료 날짜를 선택하세요"}
-              </p>
-
-              {/* 요일 헤더 */}
-              <div className="grid grid-cols-7 mb-1">
-                {WEEK_LABELS.map((w) => (
-                  <div key={w} className="text-center text-xs text-zinc-400 py-0.5">{w}</div>
-                ))}
-              </div>
-
-              {/* 날짜 그리드 */}
-              <div className="grid grid-cols-7 gap-y-0.5">
-                {calDays.map((day, idx) => {
-                  if (day === null) return <div key={`e-${idx}`} />;
-                  const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                  const isToday = dateStr === todayStr;
-                  const isFrom = dateStr === tempFrom || (dateFilter === "custom" && dateStr === customRange?.from);
-                  const isTo = dateFilter === "custom" && dateStr === customRange?.to;
-                  const inRange = dateFilter === "custom" && customRange
-                    ? dateStr > customRange.from && dateStr < customRange.to
-                    : false;
-                  const isTempRange = pickStep === "to" && tempFrom ? dateStr > tempFrom : false;
-
-                  return (
-                    <button
-                      key={dateStr}
-                      onClick={() => handleCalendarDayClick(dateStr)}
-                      className={`flex items-center justify-center h-8 w-full text-xs rounded-full transition-colors ${
-                        isFrom
-                          ? "bg-zinc-900 text-white"
-                          : isTo
-                          ? "bg-zinc-700 text-white"
-                          : inRange || isTempRange
-                          ? "bg-zinc-100 text-zinc-700"
-                          : isToday
-                          ? "font-bold text-zinc-900 ring-1 ring-zinc-300"
-                          : "text-zinc-700 hover:bg-zinc-100"
-                      }`}
-                    >
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </>
-        )}
-
         {/* 태그 필터 활성 표시 */}
         {tagFilter && (
           <div className="flex items-center gap-1.5 mt-1.5 px-1">
@@ -513,6 +517,71 @@ export default function ItemFeed({
         )}
       </div>
 
+      {/* 달력 포털 — sticky z-20 stacking context 외부에서 렌더링 */}
+      {showCalendar && calendarPos && typeof document !== "undefined" && createPortal(
+        <>
+          <div
+            className="fixed inset-0 z-[60]"
+            onClick={() => { setShowCalendar(false); setPickStep("from"); setTempFrom(null); }}
+          />
+          <div
+            style={{ position: "fixed", top: calendarPos.top, left: calendarPos.left, right: calendarPos.right, zIndex: 70 }}
+            className="bg-white border border-zinc-200 rounded-2xl shadow-lg p-3"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear((y) => y - 1); } else setCalMonth((m) => m - 1); }}
+                className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-500"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-semibold text-zinc-900">{calYear}년 {MONTH_NAMES[calMonth]}</span>
+              <button
+                onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear((y) => y + 1); } else setCalMonth((m) => m + 1); }}
+                className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-500"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-center text-xs text-zinc-400 mb-2">
+              {pickStep === "from" ? "시작 날짜를 선택하세요" : "종료 날짜를 선택하세요"}
+            </p>
+            <div className="grid grid-cols-7 mb-1">
+              {WEEK_LABELS.map((w) => (
+                <div key={w} className="text-center text-xs text-zinc-400 py-0.5">{w}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-y-0.5">
+              {calDays.map((day, idx) => {
+                if (day === null) return <div key={`e-${idx}`} />;
+                const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                const isToday = dateStr === todayStr;
+                const isFrom = dateStr === tempFrom || (dateFilter === "custom" && dateStr === customRange?.from);
+                const isTo = dateFilter === "custom" && dateStr === customRange?.to;
+                const inRange = dateFilter === "custom" && customRange ? dateStr > customRange.from && dateStr < customRange.to : false;
+                const isTempRange = pickStep === "to" && tempFrom ? dateStr > tempFrom : false;
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => handleCalendarDayClick(dateStr)}
+                    className={`flex items-center justify-center h-8 w-full text-xs rounded-full transition-colors ${
+                      isFrom ? "bg-zinc-900 text-white"
+                      : isTo ? "bg-zinc-700 text-white"
+                      : inRange || isTempRange ? "bg-zinc-100 text-zinc-700"
+                      : isToday ? "font-bold text-zinc-900 ring-1 ring-zinc-300"
+                      : "text-zinc-700 hover:bg-zinc-100"
+                    }`}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
       {/* 아이템 목록 */}
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-xs text-zinc-400">
@@ -525,26 +594,62 @@ export default function ItemFeed({
             : "저장된 노트가 없어요"}
         </div>
       ) : (
-        <div className="space-y-3">
-          {/* 핀 고정 섹션 */}
-          {filtered.some((i) => i.is_pinned) && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-amber-500 px-0.5">고정됨</p>
-              {filtered.filter((i) => i.is_pinned).map((item) => (
-                <ItemCard key={item.id} item={item} onTagClick={handleTagClick} collections={collections} />
-              ))}
+        (() => {
+          const containerClass = viewMode === "grid" ? "grid grid-cols-2 gap-2" : viewMode === "compact" ? "space-y-0.5" : "space-y-1";
+          return (
+            <div className="space-y-3">
+              {/* 핀 고정 섹션 */}
+              {filtered.some((i) => i.is_pinned) && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-amber-500 px-0.5">고정됨</p>
+                  <div className={containerClass}>
+                    {filtered.filter((i) => i.is_pinned).map((item) => (
+                      <ItemCard key={item.id} item={item} onTagClick={handleTagClick} collections={collections} viewMode={viewMode} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {sortOrder === "type" ? (
+                [
+                  { label: "링크", type: "link" as const, icon: <Link2 className="w-3 h-3" /> },
+                  { label: "노트", type: "note" as const, icon: <FileText className="w-3 h-3" /> },
+                ].map(({ label, type, icon }) => {
+                  const typeItems = sortedNonPinned.filter((i) => i.type === type);
+                  if (typeItems.length === 0) return null;
+                  return (
+                    <div key={type} className="space-y-1">
+                      <p className="text-xs font-medium text-zinc-400 px-0.5 flex items-center gap-1">
+                        {icon}{label}
+                      </p>
+                      <div className={containerClass}>
+                        {typeItems.map((item) => (
+                          <ItemCard key={item.id} item={item} onTagClick={handleTagClick} collections={collections} viewMode={viewMode} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : sortOrder === "alpha" ? (
+                <div className={containerClass}>
+                  {sortedNonPinned.map((item) => (
+                    <ItemCard key={item.id} item={item} onTagClick={handleTagClick} collections={collections} viewMode={viewMode} />
+                  ))}
+                </div>
+              ) : (
+                groupItemsByDate(sortedNonPinned).map((group) => (
+                  <div key={group.label} className="space-y-1">
+                    <p className="text-xs font-medium text-zinc-400 px-0.5">{group.label}</p>
+                    <div className={containerClass}>
+                      {group.items.map((item) => (
+                        <ItemCard key={item.id} item={item} onTagClick={handleTagClick} collections={collections} viewMode={viewMode} />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          )}
-          {/* 날짜별 그룹 */}
-          {groupItemsByDate(filtered.filter((i) => !i.is_pinned)).map((group) => (
-            <div key={group.label} className="space-y-1">
-              <p className="text-xs font-medium text-zinc-400 px-0.5">{group.label}</p>
-              {group.items.map((item) => (
-                <ItemCard key={item.id} item={item} onTagClick={handleTagClick} collections={collections} />
-              ))}
-            </div>
-          ))}
-        </div>
+          );
+        })()
       )}
 
       {/* 무한 스크롤 트리거 */}
