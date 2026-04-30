@@ -50,31 +50,37 @@ Anyone who knows the **4-digit view password** can access immediately. No sign-u
 
 ### Content
 - Save links (auto OG meta extraction — title + thumbnail)
+  - YouTube watch/Shorts URLs → title + thumbnail via oEmbed API
+  - Other sites → HTML head meta tag parsing (og:title, og:image, etc.)
 - Save notes (text memos)
+- File upload
 - Tag classification (comma-separated, up to 10 tags, tag filtering)
+- Collections (folder-based grouping, sidebar filter)
+- Auto-detected categories — 12 types (AI · Dev · Design · Marketing · Learning · Business · Investment · News · Article · Video/Media · Tutorial · Other)
 - All / Links / Notes filter tabs
-- All-groups feed (unified view across all your groups)
+- Copy link button (one-click URL copy per card; copies title if no URL)
 - Search from 1 character (Korean consonants, alphabet, URL address)
   - 2+ characters: pg_trgm similarity search (title · content · URL · tags)
   - 1 character: direct ilike matching
 - Card click → detail sheet (full content, thumbnail, tags, edit/delete)
 - Link title click → opens external URL directly
-- Inline editing (title · content · tags)
+- Inline editing (title · content · tags · category · collection)
 - Pin (pinned items appear in a top section of your feed)
 - Date group headers (Today / Yesterday / This Week / This Month / Earlier)
 - Soft delete (recoverable within 30 days)
 - Infinite scroll (IntersectionObserver)
-- Group onboarding (`/onboarding` — enter name, description, category and jump in)
 
 ### UI/UX
+- Responsive 2-column layout: desktop left filter sidebar (220px) + right feed; mobile sticky top filter bar
 - Toast notification system (real-time feedback for save, edit, delete, error)
 - Save bottom sheet (slide-up on mobile, modal on desktop)
 - Clipboard auto-detect (auto-fills URL field if you've copied a link)
 - OG meta preview (title + thumbnail appear as you type a URL)
 - Card detail sheet (bottom sheet pattern, mobile and desktop)
-- Compact card layout (2-row fixed, max 2 tags shown + overflow indicator)
+- 3 view modes: list · compact · grid + sort by newest · oldest · name · type
+- Custom date range picker (calendar UI, pick start and end date)
 - Fully responsive at 375px — header, cards, dialogs all optimized for mobile
-- Accessibility: aria-labels on key buttons (pin, edit, delete, group switch, logout)
+- Accessibility: aria-labels on key buttons (copy, pin, edit, delete, logout)
 - Error boundary (error.tsx), skeleton loading (loading.tsx), global 404 (not-found.tsx)
 
 ### Security
@@ -191,10 +197,12 @@ supabase/migrations/
 ├── 006_username_auth.sql
 ├── 007_public_only.sql
 ├── 008_search_rpc_url.sql
-└── 009_site_config.sql          # Password hash storage table (required)
+├── 009_site_config.sql          # Password hash storage table (required)
+├── 010_collections.sql          # Collections folder feature (required)
+└── 011_item_category.sql        # Item category auto-detection (required)
 ```
 
-> **Migration 009 is required.** The view/admin password change feature depends on the `site_config` table.
+> **Migrations 009–011 are required.** They enable password change, collections, and category detection.
 
 ---
 
@@ -232,7 +240,7 @@ knowledge-link-hub/
 │   ├── middleware.ts           # Session cookie validation middleware
 │   └── types/                 # TypeScript type definitions
 ├── supabase/
-│   └── migrations/            # SQL migration files (001–009)
+│   └── migrations/            # SQL migration files (001–011)
 ├── .env.example               # Environment variable template (no real values)
 ├── .gitignore
 ├── LICENSE                    # MIT License (SoDam AI Studio)
@@ -249,8 +257,8 @@ knowledge-link-hub/
 2. Add all environment variables in Vercel Dashboard > Settings > Environment Variables
    - Generate a fresh `SESSION_SECRET`: `openssl rand -hex 32`
    - Set secure `VIEW_PASSWORD` and `ADMIN_PASSWORD` before going live
-3. Run SQL migrations 001–009 in your Supabase SQL Editor
-4. After deploy, change passwords at `/admin`
+3. Run SQL migrations **001–011** in order in your Supabase SQL Editor
+4. After deploy, change both passwords at `/admin`
 
 ```bash
 # Using Vercel CLI
@@ -313,7 +321,7 @@ npm install
 
 **6. Set up the database**
 - Go to Supabase Dashboard > SQL Editor
-- Open each file in `supabase/migrations/` one by one (001 to 009) and run them in order
+- Open each file in `supabase/migrations/` one by one (001 to 011) and run them in order
 
 **7. Start the app**
 ```

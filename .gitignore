@@ -46,3 +46,6 @@ client_secret_*.json
 *.apps.googleusercontent.com.json
 
 .vercel
+
+# Local-only sensitive docs (never commit)
+PASSWORDS.md
