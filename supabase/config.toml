@@ -1,8 +1,8 @@
 project_id = "sctozumzobwztraxxpva"
 
 [auth]
-site_url = "https://26y04m12dknowledge-link-hub.vercel.app"
-additional_redirect_urls = ["https://26y04m12dknowledge-link-hub.vercel.app/auth/callback"]
+site_url = "https://knowinfo-hub.vercel.app"
+additional_redirect_urls = ["https://knowinfo-hub.vercel.app/auth/callback"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 
