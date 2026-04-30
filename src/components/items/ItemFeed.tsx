@@ -304,9 +304,10 @@ export default function ItemFeed({
   }
 
   return (
-    <div className="space-y-3">
-      {/* 필터 영역 — sticky (TeamHeader h-14 아래) */}
-      <div ref={filterBarRef} className="sticky top-14 z-20 -mx-4 px-4 pt-1 pb-2 bg-zinc-50/90 backdrop-blur-sm">
+    <div className="lg:flex lg:gap-5 lg:items-start">
+      {/* 필터 사이드바 — 모바일: sticky top, 데스크톱: left sidebar */}
+      <div ref={filterBarRef} className="sticky top-14 z-20 -mx-4 px-4 pt-1 pb-2 bg-zinc-50/90 backdrop-blur-sm lg:mx-0 lg:px-4 lg:py-4 lg:bg-white lg:rounded-xl lg:border lg:border-zinc-200 lg:backdrop-blur-none lg:shadow-sm lg:w-[220px] lg:flex-shrink-0 lg:self-start">
+        <p className="hidden lg:block text-xs font-semibold text-zinc-500 mb-3">필터</p>
 
         {/* 0행: 뷰 모드 + 정렬 */}
         <div className="flex items-center justify-between mb-1.5">
@@ -355,7 +356,7 @@ export default function ItemFeed({
         </div>
 
         {/* 1행: 타입 필터 탭 */}
-        <div className="flex items-center gap-1 bg-zinc-100/80 rounded-xl p-1">
+        <div className="flex items-center gap-1 bg-zinc-100/80 rounded-xl p-1 lg:flex-col">
           <button
             onClick={() => setFilter("all")}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 ${
@@ -386,7 +387,7 @@ export default function ItemFeed({
 
         {/* 2행: 컬렉션 필터 */}
         {collections && collections.length > 0 && (
-          <div className="flex gap-1.5 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-1.5 mt-1.5 overflow-x-auto lg:flex-wrap lg:overflow-x-visible" style={{ scrollbarWidth: "none" }}>
             <button
               onClick={() => setCollectionFilter(null)}
               className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -416,7 +417,7 @@ export default function ItemFeed({
 
         {/* 3행: 카테고리 필터 — 12개 전체 항시 표시, 개수 뱃지, 빈 항목 비활성 */}
         {items.some((i) => i.category) && (
-          <div className="flex gap-1.5 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-1.5 mt-1.5 overflow-x-auto lg:flex-wrap lg:overflow-x-visible" style={{ scrollbarWidth: "none" }}>
             <button
               onClick={() => setCategoryFilter(null)}
               className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -453,7 +454,7 @@ export default function ItemFeed({
         )}
 
         {/* 4행: 날짜 필터 탭 */}
-        <div className="flex items-center gap-1 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+        <div className="flex items-center gap-1 mt-1.5 overflow-x-auto lg:flex-wrap lg:overflow-x-visible" style={{ scrollbarWidth: "none" }}>
           {(["all", "today", "yesterday", "3days", "week", "month", "3months"] as const).map((d) => (
             <button
               key={d}
@@ -517,6 +518,8 @@ export default function ItemFeed({
         )}
       </div>
 
+      {/* 아이템 영역 — 데스크톱에서 flex-1 */}
+      <div className="flex-1 min-w-0 space-y-3 mt-2 lg:mt-0">
       {/* 달력 포털 — sticky z-20 stacking context 외부에서 렌더링 */}
       {showCalendar && calendarPos && typeof document !== "undefined" && createPortal(
         <>
@@ -662,6 +665,7 @@ export default function ItemFeed({
       {!hasMore && items.length >= totalCount && totalCount > 0 && filter === "all" && !tagFilter && dateFilter === "all" && teamId !== "all" && (
         <p className="text-center text-xs text-zinc-400 py-2">모든 항목을 불러왔습니다</p>
       )}
+      </div>
     </div>
   );
 }

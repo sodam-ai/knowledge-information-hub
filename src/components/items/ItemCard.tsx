@@ -9,8 +9,8 @@ import type { Item, Tag, Collection, ItemCategory } from "@/types";
 import { ITEM_CATEGORY_LABELS, ITEM_CATEGORY_COLORS } from "@/types";
 import {
   Link2, FileText, Paperclip, Trash2, ExternalLink, Pencil,
-  Pin, PinOff, X, Check, Users, ChevronDown, ChevronUp,
-  Calendar, Hash, FolderOpen,
+  Pin, PinOff, X, Check, ChevronDown, ChevronUp,
+  Calendar, Hash, FolderOpen, Copy,
 } from "lucide-react";
 
 interface ItemCardProps {
@@ -193,12 +193,6 @@ function DetailSheet({ item, onClose, onEditClick, onDeleteClick }: DetailSheetP
                 <Calendar className="w-3 h-3" />
                 {formatDate(item.created_at)}
               </span>
-              {item.teamName && (
-                <span className="flex items-center gap-1">
-                  <Users className="w-3 h-3" />
-                  {item.teamName}
-                </span>
-              )}
             </div>
 
             {/* 액션 버튼 */}
@@ -276,6 +270,17 @@ export default function ItemCard({ item: initialItem, onTagClick, collections, v
       toastError("핀 처리 중 오류가 발생했어요.");
     }
     setIsPinning(false);
+  }
+
+  async function handleCopyUrl(e: React.MouseEvent) {
+    e.stopPropagation();
+    const text = item.url ?? item.title;
+    try {
+      await navigator.clipboard.writeText(text);
+      success(item.url ? "링크가 복사되었어요." : "제목이 복사되었어요.");
+    } catch {
+      toastError("복사 중 오류가 발생했어요.");
+    }
   }
 
   function handleEditOpen(e?: React.MouseEvent) {
@@ -537,13 +542,6 @@ export default function ItemCard({ item: initialItem, onTagClick, collections, v
                   </button>
                 )}
 
-                {item.teamName && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium bg-zinc-900 text-white flex-shrink-0">
-                    <Users className="w-2 h-2" />
-                    {item.teamName}
-                  </span>
-                )}
-
                 {item.collection_id && (() => {
                   const col = collections?.find((c) => c.id === item.collection_id);
                   return col ? (
@@ -612,11 +610,19 @@ export default function ItemCard({ item: initialItem, onTagClick, collections, v
               />
             ) : null}
 
-            {/* 액션 버튼 — 모바일 항상, 데스크톱 hover */}
+            {/* 액션 버튼 */}
             <div
-              className="flex items-center gap-0.5 flex-shrink-0 ml-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150"
+              className="flex items-center gap-0.5 flex-shrink-0 ml-1"
               onClick={(e) => e.stopPropagation()}
             >
+              <button
+                onClick={handleCopyUrl}
+                className="p-1 rounded-md text-zinc-300 hover:text-blue-400 hover:bg-blue-50 transition-all duration-150"
+                title="링크 복사"
+                aria-label="링크 복사"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
               <button
                 onClick={(e) => handlePin(e)}
                 disabled={isPinning}

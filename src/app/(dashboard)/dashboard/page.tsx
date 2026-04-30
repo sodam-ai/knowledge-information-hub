@@ -83,7 +83,7 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-zinc-50">
       <TeamHeader />
 
-      <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
+      <main className="max-w-5xl mx-auto px-4 py-5 space-y-4">
         <SearchBar teamId="all" />
 
         <div className="flex items-center justify-between">
