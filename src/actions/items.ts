@@ -9,7 +9,36 @@ import crypto from "crypto";
 
 const MICROLINK_TIMEOUT_MS = 7000;
 
+function isYouTubeUrl(url: string): boolean {
+  return /youtube\.com\/(watch|shorts\/)|youtu\.be\//.test(url);
+}
+
+async function fetchYouTubeOEmbed(url: string): Promise<{ title: string; thumbnail?: string } | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+      { signal: controller.signal, cache: "no-store" }
+    );
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const title = sanitizeText(json?.title, 500);
+    const thumbnail = sanitizeImageUrl(json?.thumbnail_url) ?? undefined;
+    if (!title) return null;
+    return { title, thumbnail };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchLinkTitle(url: string): Promise<{ title: string; thumbnail?: string }> {
+  if (isYouTubeUrl(url)) {
+    const yt = await fetchYouTubeOEmbed(url);
+    if (yt) return yt;
+  }
+
   try {
     const apiUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}`;
     const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -42,7 +71,7 @@ function detectItemCategory(type: string, url?: string | null): ItemCategory | n
   if (type === "note") return "idea";
   if (type === "link" && url) {
     const u = url.toLowerCase();
-    if (/youtube\.com\/watch|youtu\.be|vimeo\.com|twitch\.tv|bilibili\.com/.test(u))
+    if (/youtube\.com\/(watch|shorts\/)|youtu\.be|vimeo\.com|twitch\.tv|bilibili\.com/.test(u))
       return "video";
     if (/github\.com|gitlab\.com|npmjs\.com|pypi\.org|hub\.docker\.com|codepen\.io|jsfiddle\.net|codesandbox\.io/.test(u))
       return "code";

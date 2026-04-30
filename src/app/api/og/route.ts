@@ -93,8 +93,26 @@ export async function GET(req: NextRequest) {
   }
 
   if (!isSafeUrl(parsed)) {
-    // 보안: SSRF 시도 여부를 노출하지 않음
     return NextResponse.json({ error: "허용되지 않는 URL입니다." }, { status: 400 });
+  }
+
+  // YouTube (watch, shorts, youtu.be) → oEmbed API
+  if (/youtube\.com\/(watch|shorts\/)|youtu\.be\//.test(rawUrl)) {
+    try {
+      const oembed = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(rawUrl)}&format=json`,
+        { cache: "no-store" }
+      );
+      if (oembed.ok) {
+        const data = await oembed.json();
+        return NextResponse.json(
+          { title: sanitizeText(data.title, 300), image: sanitizeImageUrl(data.thumbnail_url) ?? undefined },
+          { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
+        );
+      }
+    } catch {
+      // fall through to HTML parse
+    }
   }
 
   const controller = new AbortController();
