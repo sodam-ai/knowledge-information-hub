@@ -35,6 +35,10 @@ echo ""
 echo "브라우저가 자동으로 열립니다. Ctrl+C 로 종료하세요."
 echo ""
 
+# === 자동 백업 (일 1회, 30일 보관) ===
+node "$SCRIPT_DIR/scripts/backup.mjs" 2>/dev/null || true
+
+
 # 브라우저 자동 열기 (OS별)
 case "$(uname)" in
   Darwin) (sleep 1 && open "$URL") &>/dev/null & ;;

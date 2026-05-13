@@ -63,6 +63,11 @@ console.log("▶ start 스크립트 복사");
 cpSync(join(ROOT, "scripts", "start.bat"), join(STANDALONE, "start.bat"));
 cpSync(join(ROOT, "scripts", "start.sh"), join(STANDALONE, "start.sh"));
 
+// 백업 스크립트 복사 (start.bat/start.sh가 시작 시 호출)
+console.log("▶ backup 스크립트 복사");
+mkdirSync(join(STANDALONE, "scripts"), { recursive: true });
+cpSync(join(ROOT, "scripts", "backup.mjs"), join(STANDALONE, "scripts", "backup.mjs"));
+
 // data/ 폴더는 있으면 그대로 유지, 없으면 빈 폴더만
 const dataDest = join(STANDALONE, "data");
 if (!existsSync(dataDest)) {

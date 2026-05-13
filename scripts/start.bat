@@ -31,6 +31,9 @@ echo.
 echo 브라우저가 자동으로 열립니다. Ctrl+C 로 종료하세요.
 echo.
 
+REM === 자동 백업 (일 1회, 30일 보관) ===
+node "%~dp0scripts\backup.mjs" 2>nul
+
 REM 브라우저 자동 열기
 start "" "http://%HOSTNAME%:%PORT%"
 
