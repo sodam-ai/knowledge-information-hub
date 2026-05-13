@@ -49,3 +49,11 @@ client_secret_*.json
 
 # Local-only sensitive docs (never commit)
 PASSWORDS.md
+
+# Local-only mode (SQLite + data folder)
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+scripts/.env.backup
