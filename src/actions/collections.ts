@@ -1,19 +1,22 @@
 "use server";
 
-import { createServiceClient } from "@/lib/supabase/server";
+import { getDb, newId } from "@/lib/db/sqlite";
 import { revalidatePath } from "next/cache";
 import type { ActionResult, Collection } from "@/types";
 
 export async function getCollections(teamId: string): Promise<ActionResult<Collection[]>> {
   if (!teamId) return { data: [] };
-  const db = createServiceClient();
-  const { data, error } = await db
-    .from("collections")
-    .select("*")
-    .eq("team_id", teamId)
-    .order("created_at", { ascending: true });
-  if (error) return { error: error.message };
-  return { data: (data ?? []) as Collection[] };
+  try {
+    const db = getDb();
+    const rows = db
+      .prepare<[string], Collection>(
+        "SELECT * FROM collections WHERE team_id = ? ORDER BY created_at ASC"
+      )
+      .all(teamId);
+    return { data: rows };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "조회 실패" };
+  }
 }
 
 export async function createCollection(
@@ -21,39 +24,53 @@ export async function createCollection(
   name: string
 ): Promise<ActionResult<Collection>> {
   if (!name || !name.trim()) return { error: "이름을 입력하세요." };
-  if (name.trim().length > 50) return { error: "50자 이내로 입력하세요." };
-  const db = createServiceClient();
-  const { data, error } = await db
-    .from("collections")
-    .insert({ name: name.trim(), team_id: teamId })
-    .select()
-    .single();
-  if (error) {
-    if (error.code === "23505") return { error: "이미 같은 이름의 컬렉션이 있습니다." };
-    return { error: error.message };
+  const trimmed = name.trim();
+  if (trimmed.length > 50) return { error: "50자 이내로 입력하세요." };
+
+  const db = getDb();
+  const id = newId();
+
+  try {
+    db.prepare(
+      "INSERT INTO collections (id, name, team_id) VALUES (?, ?, ?)"
+    ).run(id, trimmed, teamId);
+
+    const row = db
+      .prepare<[string], Collection>("SELECT * FROM collections WHERE id = ?")
+      .get(id);
+
+    revalidatePath("/dashboard");
+    return { data: row! };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE")) {
+      return { error: "이미 같은 이름의 컬렉션이 있습니다." };
+    }
+    return { error: "컬렉션 생성 중 오류가 발생했습니다." };
   }
-  revalidatePath("/dashboard");
-  return { data: data as Collection };
 }
 
 export async function deleteCollection(collectionId: string): Promise<ActionResult> {
-  const db = createServiceClient();
-  const { error } = await db.from("collections").delete().eq("id", collectionId);
-  if (error) return { error: error.message };
-  revalidatePath("/dashboard");
-  return {};
+  try {
+    const db = getDb();
+    db.prepare("DELETE FROM collections WHERE id = ?").run(collectionId);
+    revalidatePath("/dashboard");
+    return {};
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "삭제 실패" };
+  }
 }
 
 export async function moveItemToCollection(
   itemId: string,
   collectionId: string | null
 ): Promise<ActionResult> {
-  const db = createServiceClient();
-  const { error } = await db
-    .from("items")
-    .update({ collection_id: collectionId, updated_at: new Date().toISOString() })
-    .eq("id", itemId);
-  if (error) return { error: error.message };
-  revalidatePath("/dashboard");
-  return {};
+  try {
+    const db = getDb();
+    db.prepare("UPDATE items SET collection_id = ? WHERE id = ?").run(collectionId, itemId);
+    revalidatePath("/dashboard");
+    return {};
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "이동 실패" };
+  }
 }

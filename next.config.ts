@@ -20,7 +20,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.microlink.io",
+      "connect-src 'self'",
       "frame-src 'none'",
       "object-src 'none'",
       "base-uri 'self'",
@@ -30,6 +30,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // 로컬 패키징을 위한 standalone 산출물
+  output: "standalone",
+  // better-sqlite3는 네이티브 바이너리 — 번들링 제외하고 런타임 import
+  serverExternalPackages: ["better-sqlite3"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },
