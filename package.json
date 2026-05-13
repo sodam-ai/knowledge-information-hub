@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build:local": "node scripts/build-local.mjs",
+    "migrate:from-supabase": "node --env-file=.env.local scripts/migrate-from-supabase.mjs export",
+    "migrate:import": "node scripts/migrate-from-supabase.mjs import"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@sentry/nextjs": "^9.12.0",
@@ -14,15 +20,19 @@
     "@supabase/supabase-js": "^2.49.4",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.34.9",
+    "better-sqlite3": "^11.10.0",
     "clsx": "^2.1.1",
+    "env-paths": "^3.0.0",
     "lucide-react": "^0.503.0",
     "next": "15.5.15",
+    "open": "^10.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.6.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^20",
     "@types/react": "^19",
