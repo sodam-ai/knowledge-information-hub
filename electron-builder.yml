@@ -56,6 +56,7 @@ mac:
 # ── Linux ─────────────────────────────────────────────────
 linux:
   icon: electron/assets/icon.png
+  maintainer: "SoDam AI Studio <noreply@github.com>"
   target:
     - AppImage
     - deb
