@@ -57,3 +57,6 @@ data/
 *.db-wal
 *.db-shm
 scripts/.env.backup
+
+# Electron 빌드 산출물
+dist-electron/

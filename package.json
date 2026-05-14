@@ -1,7 +1,8 @@
 {
   "name": "knowledge-information-hub",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,7 +10,12 @@
     "lint": "next lint",
     "build:local": "node scripts/build-local.mjs",
     "migrate:from-supabase": "node --env-file=.env.local scripts/migrate-from-supabase.mjs export",
-    "migrate:import": "node scripts/migrate-from-supabase.mjs import"
+    "migrate:import": "node scripts/migrate-from-supabase.mjs import",
+    "electron:dev": "electron electron/main.cjs",
+    "dist": "npm run build:local && electron-builder",
+    "dist:win": "npm run build:local && electron-builder --win",
+    "dist:mac": "npm run build:local && electron-builder --mac",
+    "dist:linux": "npm run build:local && electron-builder --linux"
   },
   "engines": {
     "node": ">=18"
@@ -38,6 +44,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.27",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.15",
     "postcss": "^8",
