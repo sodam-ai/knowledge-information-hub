@@ -1,5 +1,8 @@
 import crypto from "crypto";
 import { getDb, newId } from "@/lib/db/sqlite";
+
+// 매 요청마다 SQLite 실시간 조회 — 정적 prerender 방지
+export const dynamic = "force-dynamic";
 import ItemFeed from "@/components/items/ItemFeed";
 import SaveItemButton from "@/components/items/SaveItemButton";
 import SearchBar from "@/components/items/SearchBar";

@@ -6,6 +6,9 @@ import { Suspense } from "react";
 import { getDb } from "@/lib/db/sqlite";
 import ShareContent from "./ShareContent";
 
+// 매 요청마다 SQLite 실시간 조회 — 정적 prerender 방지
+export const dynamic = "force-dynamic";
+
 export default async function SharePage() {
   const db = getDb();
   const teams = db
