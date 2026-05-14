@@ -1,0 +1,47 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b" />
+      <stop offset="100%" stop-color="#3f3f46" />
+    </linearGradient>
+    <linearGradient id="page" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fafafa" />
+      <stop offset="100%" stop-color="#e4e4e7" />
+    </linearGradient>
+    <linearGradient id="star" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="200" ry="200" fill="url(#bg)" />
+
+  <g transform="translate(512, 540)" filter="url(#shadow)">
+    <path d="M -260,-180 L -10,-220 L -10,180 L -260,140 Z"
+          fill="url(#page)" stroke="#71717a" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M 10,-220 L 260,-180 L 260,140 L 10,180 Z"
+          fill="url(#page)" stroke="#71717a" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M -10,-220 L 10,-220 L 10,180 L -10,180 Z" fill="#52525b" />
+
+    <rect x="-220" y="-110" width="180" height="14" rx="7" fill="#a1a1aa" />
+    <rect x="-220" y="-70"  width="160" height="14" rx="7" fill="#a1a1aa" />
+    <rect x="-220" y="-30"  width="180" height="14" rx="7" fill="#a1a1aa" />
+    <rect x="-220" y="10"   width="140" height="14" rx="7" fill="#a1a1aa" />
+    <rect x="-220" y="50"   width="170" height="14" rx="7" fill="#a1a1aa" />
+
+    <rect x="40" y="-110" width="180" height="14" rx="7" fill="#a1a1aa" />
+    <rect x="40" y="-70"  width="170" height="14" rx="7" fill="#a1a1aa" />
+    <rect x="40" y="-30"  width="160" height="14" rx="7" fill="#a1a1aa" />
+    <rect x="40" y="10"   width="180" height="14" rx="7" fill="#a1a1aa" />
+    <rect x="40" y="50"   width="150" height="14" rx="7" fill="#a1a1aa" />
+  </g>
+
+  <g transform="translate(800, 240)" filter="url(#shadow)">
+    <circle cx="0" cy="0" r="110" fill="url(#star)" />
+    <polygon points="0,-55 16.5,-17 58,-17 25,7 37,47 0,23 -37,47 -25,7 -58,-17 -16.5,-17"
+             fill="#ffffff" />
+  </g>
+</svg>
