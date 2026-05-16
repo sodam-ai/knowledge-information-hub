@@ -256,11 +256,6 @@ function SettingsContent() {
               ← 대시보드로 돌아가기
             </Link>
           </div>
-          <div>
-            <Link href="/admin" className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
-              관리자 보안 설정
-            </Link>
-          </div>
         </div>
 
       </div>

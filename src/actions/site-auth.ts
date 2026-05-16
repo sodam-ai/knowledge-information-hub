@@ -112,12 +112,6 @@ export async function signIn(
   redirect("/dashboard");
 }
 
-export async function signOut() {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
-  redirect("/login");
-}
-
 export async function changeViewPassword(
   _: ActionResult<boolean>,
   formData: FormData
