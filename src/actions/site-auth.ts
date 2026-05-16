@@ -56,10 +56,44 @@ function upsertSiteConfig(key: string, value: string): void {
   ).run(key, value);
 }
 
+function getAuthEnabledFlag(): boolean {
+  const db = getDb();
+  const row = db
+    .prepare<[string], SiteConfigRow>("SELECT value FROM site_config WHERE key = ?")
+    .get("auth_enabled");
+  return row?.value !== "0";
+}
+
+export async function getAuthEnabled(): Promise<boolean> {
+  return getAuthEnabledFlag();
+}
+
+export async function setAuthEnabled(
+  enabled: boolean,
+  adminPassword: string
+): Promise<ActionResult<boolean>> {
+  if (!adminPassword) return { error: "관리자 비밀번호를 입력해주세요." };
+  if (!(await verifyAdminPassword(adminPassword))) {
+    return { error: "관리자 비밀번호가 올바르지 않습니다." };
+  }
+  try {
+    upsertSiteConfig("auth_enabled", enabled ? "1" : "0");
+    return { data: enabled };
+  } catch {
+    return { error: "설정 변경 중 오류가 발생했습니다." };
+  }
+}
+
 export async function signIn(
   _: ActionResult,
   formData: FormData
 ): Promise<ActionResult> {
+  if (!getAuthEnabledFlag()) {
+    const cookieStore = await cookies();
+    cookieStore.set(SESSION_COOKIE, await createSessionToken(), sessionCookieOptions());
+    redirect("/dashboard");
+  }
+
   const password = (formData.get("password") as string)?.trim();
   if (!password) return { error: "비밀번호를 입력해주세요." };
 

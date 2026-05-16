@@ -299,6 +299,55 @@ export async function softDeleteItem(itemId: string): Promise<ActionResult> {
 }
 
 // ───────────────────────────────────────────────────────────
+// getTrashedItems — 휴지통 목록 (소프트 삭제된 항목)
+// ───────────────────────────────────────────────────────────
+export async function getTrashedItems(): Promise<ActionResult<SearchItem[]>> {
+  try {
+    const db = getDb();
+    const rows = db
+      .prepare<[], ItemRow>(
+        `SELECT * FROM items WHERE is_deleted = 1 ORDER BY deleted_at DESC LIMIT 100`
+      )
+      .all();
+    return { data: attachTagsToItems(rows) };
+  } catch {
+    return { error: "휴지통을 불러오는 중 오류가 발생했습니다." };
+  }
+}
+
+// ───────────────────────────────────────────────────────────
+// restoreItem — 휴지통에서 복원
+// ───────────────────────────────────────────────────────────
+export async function restoreItem(itemId: string): Promise<ActionResult> {
+  try {
+    const db = getDb();
+    db.prepare(
+      "UPDATE items SET is_deleted = 0, deleted_at = NULL WHERE id = ? AND is_deleted = 1"
+    ).run(itemId);
+    revalidatePath("/dashboard");
+    return {};
+  } catch {
+    return { error: "복원 중 오류가 발생했습니다." };
+  }
+}
+
+// ───────────────────────────────────────────────────────────
+// permanentDeleteItem — 영구 삭제 (비가역)
+// ───────────────────────────────────────────────────────────
+export async function permanentDeleteItem(itemId: string): Promise<ActionResult> {
+  try {
+    const db = getDb();
+    // 휴지통(is_deleted=1) 항목만 영구 삭제 가능 — 실수 방지
+    const result = db.prepare("DELETE FROM items WHERE id = ? AND is_deleted = 1").run(itemId);
+    if (result.changes === 0) return { error: "휴지통에 없는 항목입니다." };
+    revalidatePath("/dashboard");
+    return {};
+  } catch {
+    return { error: "영구 삭제 중 오류가 발생했습니다." };
+  }
+}
+
+// ───────────────────────────────────────────────────────────
 // getMoreItems
 // ───────────────────────────────────────────────────────────
 export async function getMoreItems(

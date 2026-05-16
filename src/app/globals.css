@@ -56,4 +56,24 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* 키보드 사용자용 일관 focus ring (마우스 클릭 시엔 표시 안 됨) */
+  :focus-visible {
+    @apply outline-none ring-2 ring-zinc-900 ring-offset-2 ring-offset-background;
+  }
+
+  /* 비활성 상태 시각 피드백 글로벌 일관 적용 */
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  input:disabled,
+  textarea:disabled,
+  select:disabled {
+    @apply cursor-not-allowed;
+  }
+
+  /* 텍스트 입력 placeholder 색상 통일 */
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-zinc-400;
+  }
 }

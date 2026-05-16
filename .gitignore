@@ -60,3 +60,11 @@ scripts/.env.backup
 
 # Electron 빌드 산출물
 dist-electron/
+
+# 일회성 시드 스크립트 (비밀번호 hardcoded — 절대 commit 금지)
+scripts/seed-userdata.mjs
+
+# Claude Code 내부 도구 산출물
+.complexity-log.md
+.plugin-config/
+.todos-report.md/

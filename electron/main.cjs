@@ -1,8 +1,8 @@
-// Knowledge Information Hub — Electron main process
-// Next.js standalone server를 자식 프로세스로 fork하고 BrowserWindow에서 로드
+// Knowledge Information Hub — Electron main (F3 in-process embed)
+// Next.js standalone server.js를 같은 process에서 require로 실행 (fork X)
 
-const { app, BrowserWindow, shell, Menu } = require("electron");
-const { fork } = require("node:child_process");
+const { app, BrowserWindow, shell, Menu, dialog } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { join } = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
@@ -11,17 +11,25 @@ const PORT = 3737;
 const HOSTNAME = "127.0.0.1";
 const APP_URL = `http://${HOSTNAME}:${PORT}`;
 
-let nextServer = null;
 let mainWindow = null;
 
-// ───────────────────────────────────────────────────────────
-// 경로 결정 (패키징 전/후 분기)
-// ───────────────────────────────────────────────────────────
-function getStandalonePath() {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, "app.asar.unpacked", ".next", "standalone");
+// ── Single Instance Lock (다중 실행 방지, EADDRINUSE 차단) ──
+if (!app.requestSingleInstanceLock()) {
+  process.exit(0);
+}
+
+app.on("second-instance", () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
   }
-  return join(__dirname, "..", ".next", "standalone");
+});
+
+// ── 경로 ─────────────────────────────────────────────
+function getStandalonePath() {
+  return app.isPackaged
+    ? join(process.resourcesPath, "app.asar.unpacked", ".next", "standalone")
+    : join(__dirname, "..", ".next", "standalone");
 }
 
 function getDataDir() {
@@ -32,30 +40,33 @@ function getDataDir() {
 
 function loadOrGenerateSessionSecret() {
   const file = join(app.getPath("userData"), "session.secret");
-  if (fs.existsSync(file)) {
-    return fs.readFileSync(file, "utf-8").trim();
-  }
+  if (fs.existsSync(file)) return fs.readFileSync(file, "utf-8").trim();
   const sec = crypto.randomBytes(32).toString("hex");
   fs.mkdirSync(app.getPath("userData"), { recursive: true });
   fs.writeFileSync(file, sec, { mode: 0o600 });
   return sec;
 }
 
-// ───────────────────────────────────────────────────────────
-// Next 서버 자식 프로세스
-// ───────────────────────────────────────────────────────────
-function startNextServer() {
+// ── In-process Next.js server (fork X, require O) ───
+function startNextServerInProcess() {
   const standalone = getStandalonePath();
   const serverPath = join(standalone, "server.js");
 
+  fs.mkdirSync(app.getPath("userData"), { recursive: true });
+  const logFile = join(app.getPath("userData"), "kih-server.log");
+  const logStream = fs.createWriteStream(logFile, { flags: "a" });
+  logStream.write(
+    `\n[${new Date().toISOString()}] in-process startNextServer\n  standalone: ${standalone}\n  serverPath exists: ${fs.existsSync(serverPath)}\n`
+  );
+
   if (!fs.existsSync(serverPath)) {
-    console.error(`[KIH] server.js not found: ${serverPath}`);
+    logStream.write(`[KIH] server.js not found: ${serverPath}\n`);
     app.quit();
     return;
   }
 
-  const env = {
-    ...process.env,
+  // env BEFORE require (server.js reads at module load)
+  Object.assign(process.env, {
     NODE_ENV: "production",
     PORT: String(PORT),
     HOSTNAME,
@@ -63,18 +74,37 @@ function startNextServer() {
     SESSION_SECRET: loadOrGenerateSessionSecret(),
     VIEW_PASSWORD: process.env.VIEW_PASSWORD ?? "1234",
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ?? "admin1234",
-  };
-
-  nextServer = fork(serverPath, [], {
-    env,
-    cwd: standalone,
-    silent: false,
   });
 
-  nextServer.on("error", (err) => console.error("[KIH] next server error:", err));
-  nextServer.on("exit", (code) => console.log("[KIH] next server exit:", code));
+  // cwd for standalone (server.js relative paths)
+  process.chdir(standalone);
+
+  // 비동기 에러 로그 (같은 process라 fork stdout pipe 불필요)
+  process.on("uncaughtException", (err) => {
+    logStream.write(
+      `[${new Date().toISOString()}] uncaughtException: ${err.stack || err.message}\n`
+    );
+  });
+  process.on("unhandledRejection", (reason) => {
+    logStream.write(
+      `[${new Date().toISOString()}] unhandledRejection: ${
+        reason instanceof Error ? reason.stack : String(reason)
+      }\n`
+    );
+  });
+
+  // 같은 process에서 require — fork X, NODE_PATH hack X
+  try {
+    require(serverPath);
+  } catch (err) {
+    logStream.write(
+      `[${new Date().toISOString()}] server.js require failed: ${err.stack || err.message}\n`
+    );
+    app.quit();
+  }
 }
 
+// ── Server ready 대기 ────────────────────────────────
 async function waitForServer(maxAttempts = 30) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -88,9 +118,7 @@ async function waitForServer(maxAttempts = 30) {
   return false;
 }
 
-// ───────────────────────────────────────────────────────────
-// BrowserWindow
-// ───────────────────────────────────────────────────────────
+// ── BrowserWindow ────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -126,11 +154,9 @@ function createWindow() {
   });
 }
 
-// ───────────────────────────────────────────────────────────
-// App lifecycle
-// ───────────────────────────────────────────────────────────
+// ── App lifecycle ────────────────────────────────────
 app.whenReady().then(async () => {
-  startNextServer();
+  startNextServerInProcess();
 
   const ready = await waitForServer();
   if (!ready) {
@@ -140,6 +166,34 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+
+  // ── Auto-updater (packaged 빌드에서만) ───────────────
+  if (app.isPackaged) {
+    const updaterLog = join(app.getPath("userData"), "kih-server.log");
+    const updaterStream = fs.createWriteStream(updaterLog, { flags: "a" });
+    autoUpdater.autoDownload = true;
+    autoUpdater.logger = {
+      info:  (msg) => updaterStream.write(`[updater] ${msg}\n`),
+      warn:  (msg) => updaterStream.write(`[updater] WARN ${msg}\n`),
+      error: (msg) => updaterStream.write(`[updater] ERROR ${msg}\n`),
+      debug: () => {},
+    };
+    autoUpdater.on("update-downloaded", () => {
+      dialog.showMessageBox(mainWindow, {
+        type: "info",
+        title: "업데이트 준비됨",
+        message: "새 버전이 다운로드되었습니다. 재시작하면 업데이트가 적용됩니다.",
+        buttons: ["지금 재시작", "나중에"],
+        defaultId: 0,
+      }).then(({ response }) => {
+        if (response === 0) autoUpdater.quitAndInstall();
+      });
+    });
+    autoUpdater.on("error", (err) => {
+      updaterStream.write(`[updater] error: ${err.message}\n`);
+    });
+    setTimeout(() => autoUpdater.checkForUpdates(), 3000);
+  }
 
   if (process.platform === "darwin") {
     Menu.setApplicationMenu(
@@ -181,11 +235,4 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
-
-app.on("before-quit", () => {
-  if (nextServer && !nextServer.killed) {
-    nextServer.kill();
-    nextServer = null;
-  }
 });

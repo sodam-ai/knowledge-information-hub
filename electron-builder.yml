@@ -19,6 +19,9 @@ extraResources:
   - from: ".next/standalone"
     to: "app.asar.unpacked/.next/standalone"
     filter: ["**/*"]
+  - from: ".next/standalone/node_modules"
+    to: "app.asar.unpacked/.next/standalone/node_modules"
+    filter: ["**/*"]
   - from: "db/migrations"
     to: "app.asar.unpacked/db/migrations"
     filter: ["**/*"]
@@ -27,8 +30,6 @@ extraResources:
 win:
   target:
     - target: nsis
-      arch: [x64]
-    - target: portable
       arch: [x64]
   artifactName: "KIH-${version}-${arch}.${ext}"
 
@@ -40,9 +41,6 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: "Knowledge Information Hub"
-
-portable:
-  artifactName: "KIH-Portable-${version}-${arch}.${ext}"
 
 # ── macOS ─────────────────────────────────────────────────
 mac:
@@ -66,4 +64,6 @@ linux:
 # ── publish (GitHub Releases) ─────────────────────────────
 publish:
   - provider: github
+    owner: sodam-ai
+    repo: knowledge-information-hub
     releaseType: release

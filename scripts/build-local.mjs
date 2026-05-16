@@ -58,10 +58,8 @@ if (!existsSync(join(bsqliteDest, "build"))) {
   );
 }
 
-// 시작 스크립트 복사
-console.log("▶ start 스크립트 복사");
-cpSync(join(ROOT, "scripts", "start.bat"), join(STANDALONE, "start.bat"));
-cpSync(join(ROOT, "scripts", "start.sh"), join(STANDALONE, "start.sh"));
+// start.bat/start.sh는 Electron 전용 패키징에서 제외 — 외부 브라우저 자동 열기 차단
+// (사용자가 .exe 외에 standalone 직접 실행 경로를 클릭할 가능성 영구 제거)
 
 // 백업 스크립트 복사 (start.bat/start.sh가 시작 시 호출)
 console.log("▶ backup 스크립트 복사");
