@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const STANDALONE = join(ROOT, ".next", "standalone");
+const STANDALONE = join(ROOT, ".next-build", "standalone");
 
 console.log("▶ next build");
 execSync("npm run build", { stdio: "inherit", cwd: ROOT });
@@ -37,8 +37,8 @@ cpSync(join(ROOT, "public"), join(STANDALONE, "public"), { recursive: true });
 
 console.log("▶ .next/static 복사");
 cpSync(
-  join(ROOT, ".next", "static"),
-  join(STANDALONE, ".next", "static"),
+  join(ROOT, ".next-build", "static"),
+  join(STANDALONE, ".next-build", "static"),
   { recursive: true }
 );
 
