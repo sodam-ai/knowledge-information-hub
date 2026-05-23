@@ -1,188 +1,85 @@
-# Knowledge Information Hub
+# Knowledge Information Hub (KIH)
 
-> 비밀번호 하나로 누구나 접근하는 **공개형 링크·노트 지식 창고**
+> 내 컴퓨터에서만 동작하는 **1인용 지식 창고 데스크톱 앱**  
+> 가입 없음 · 로그인 없음 · 완전 로컬 · 인터넷 없이도 동작
 
-[English Documentation →](./README.en.md)
-
----
-
-## 목차
-
-- [프로젝트 개요](#프로젝트-개요)
-- [주요 기능](#주요-기능)
-- [설치 및 실행 방법](#설치-및-실행-방법)
-- [환경 변수 설정](#환경-변수-설정)
-- [Supabase 마이그레이션](#supabase-마이그레이션)
-- [폴더 구조](#폴더-구조)
-- [배포 방법](#배포-방법)
-- [운영 시 주의사항](#운영-시-주의사항)
-- [처음 시작하는 분을 위한 가이드](#처음-시작하는-분을-위한-가이드)
-
----
-
-## 프로젝트 개요
-
-**Knowledge Information Hub (KIH)** 는 팀·스터디·커뮤니티 등 모든 종류의 그룹이 링크와 노트를 함께 쌓고, 언제든 빠르게 찾을 수 있는 공개형 지식 창고 서비스입니다.
-
-회원가입 없이 **열람 비밀번호(숫자 4자리)** 하나만 알면 누구나 접근할 수 있는 단순한 구조입니다.
-로그인 후 바로 피드 화면이 표시됩니다.
-
-- **기술 스택**: Next.js 15 (App Router) · TypeScript · Supabase (PostgreSQL) · Tailwind CSS
-- **인증**: 사이트 전체 열람 비밀번호(숫자 4자리) · Web Crypto API HMAC-SHA256 세션
-- **보안**: SSRF 방어 · Rate Limiting · 입력값 검증 · HttpOnly 세션 쿠키
-- **관리**: `/admin` 페이지에서 열람·관리자 비밀번호 변경
-- **저작권**: SoDam AI Studio
+[English →](./README.en.md) | [자세한 사용 가이드 →](./LOCAL.md)
 
 ---
 
 ## 주요 기능
 
-### 접근 방식
-- 회원가입 없음 — 열람 비밀번호(숫자 4자리)만 입력하면 즉시 피드 접근
-- 세션 7일 유지 (HMAC-SHA256 서명 쿠키, HttpOnly)
-- `/admin` 페이지에서 열람 비밀번호 · 관리자 비밀번호 변경 가능
-
-### 콘텐츠
-- 링크 저장 (URL 자동 제목·썸네일 추출, OG 메타 자동 수집)
-  - YouTube watch·Shorts URL → oEmbed API로 제목·썸네일 자동 추출
-  - 일반 사이트 → HTML head 메타태그 파싱 (og:title, og:image 등)
-- 노트 저장 (텍스트 메모)
-- 파일 업로드
-- 태그 분류 (쉼표 구분, 최대 10개, 태그 필터링)
-- 컬렉션 폴더 분류 (항목을 폴더로 묶어 관리, 사이드바 필터)
-- 카테고리 자동 탐지 12종 (AI·개발·디자인·마케팅·학습·비즈니스·투자·뉴스·아티클·영상/미디어·튜토리얼·기타)
-- 전체 / 링크 / 노트 필터 탭
-- 링크 복사 버튼 (카드에서 URL 원클릭 복사, URL 없으면 제목 복사)
-- 검색: 1글자부터 가능 (자음·알파벳·URL 주소 검색 지원)
-  - 2글자 이상: pg_trgm 유사도 검색 (제목·내용·URL·태그)
-  - 1글자: 직접 ilike 매칭
-- 카드 클릭 → 상세 시트 (전체 내용, 썸네일, 태그, 수정/삭제)
-- 링크 제목 클릭 → 외부 URL 바로 연결
-- 인라인 수정 (제목·내용·태그·카테고리·컬렉션)
-- 핀 고정 (피드 상단 고정 섹션)
-- 날짜별 그룹 헤더 (오늘 / 어제 / 이번 주 / 이번 달 / 그 이전)
-- 소프트 삭제 (30일 내 복구 가능)
-- 무한 스크롤 (IntersectionObserver)
-
-### UI/UX
-- 반응형 2단 레이아웃: 데스크톱 좌측 필터 사이드바(220px) + 우측 피드, 모바일 상단 sticky 필터바
-- 토스트 알림 시스템 (저장·수정·삭제·오류 실시간 피드백)
-- 저장하기: 바닥 시트 (모바일 슬라이드 업, 데스크톱 모달)
-- 클립보드 자동 감지 (URL 복사 후 저장 시 자동 입력)
-- OG 메타 미리보기 (URL 입력 시 제목·썸네일 자동 표시)
-- 카드 상세 시트 (바닥 시트 패턴, 모바일/데스크톱 대응)
-- 목록·컴팩트·그리드 3가지 뷰 모드 + 최신순·오래된순·이름순·유형별 정렬
-- 날짜 커스텀 범위 피커 (달력 UI, 시작~종료일 선택)
-- 모바일 375px 완전 대응 (헤더·카드·다이얼로그 반응형 최적화)
-- 접근성: 핵심 버튼 aria-label 적용 (복사·핀·수정·삭제·로그아웃)
-- 에러 경계 (error.tsx) + 스켈레톤 로딩 (loading.tsx) + 전역 404 (not-found.tsx)
-
-### 보안
-- SSRF 방어: 사설 IP/루프백/클라우드 메타데이터 차단 (HTTPS 전용)
-- Rate Limiting: Upstash Redis 슬라이딩 윈도우 (OG 20회/분)
-- 입력값 Zod 검증 + HTML 이스케이프 처리
-- 보안 헤더: X-Frame-Options, CSP, HSTS, X-Content-Type-Options
-- 세션 쿠키: HttpOnly · SameSite=Strict · Secure(프로덕션)
+| 기능 | 설명 |
+|------|------|
+| 링크·노트 저장 | URL 자동 제목·썸네일 추출, 텍스트 메모 |
+| 태그·카테고리 | 자동 분류 12종, 최대 10개 태그, 사이드바 필터 |
+| 전체 검색 | 한국어 1글자부터 FTS5 전문 검색, 태그 검색 보강 |
+| 즉시 반영 | 저장 직후 피드 즉시 업데이트 (낙관적 업데이트) |
+| 휴지통 | 소프트 삭제, 복원, 영구 삭제 |
+| 자동 백업 | 매일 DB 자동 백업, 30일 보관 |
+| 완전 로컬 | SQLite 단일 파일 — Supabase·Vercel·Redis 불필요 |
 
 ---
 
-## 설치 및 실행 방법
+## 설치 방법
 
-### 준비물
-- Node.js 18 이상 (권장: 20 LTS)
-- npm
-- Supabase 계정 및 프로젝트
-- Upstash Redis 계정 (Rate Limiting용, 무료 티어로 충분)
+### 일반 사용자 — 설치 마법사
 
-### 1단계 — 소스코드 가져오기
+개발자가 빌드해서 전달한 설치 파일을 받은 경우:
 
-```bash
-git clone https://github.com/sodam-ai/knowledge-information-hub.git
-cd knowledge-information-hub
+1. `KIH-Setup-x.x.x-x64.exe` 더블클릭
+2. "Windows의 PC 보호" 화면 → **추가 정보 → 실행** 클릭 (코드 서명 미적용, 1회만)
+3. 설치 마법사에서 "다음 → 다음 → 설치"
+4. 시작 메뉴 또는 바탕화면 **Knowledge Information Hub** 실행 → 바로 피드 화면 진입
+
+> 자세한 사용 안내: [LOCAL.md](./LOCAL.md)
+
+---
+
+## 데이터 위치
+
+```
+%APPDATA%\knowledge-information-hub\
+├── data/
+│   ├── kih.db        ← 모든 데이터 (SQLite 단일 파일)
+│   └── backups/      ← 자동 백업 (30일 보관)
+├── session.secret    ← 세션 서명 키 (자동 생성)
+└── kih-server.log    ← 서버 로그
 ```
 
-### 2단계 — 패키지 설치
+**백업**: 위 폴더 전체를 외장하드·USB에 복사.  
+**PC 이전**: 새 PC에 앱 설치 후 위 폴더를 같은 위치에 덮어쓰기.
 
-```bash
+---
+
+## 개발자용 빌드 안내
+
+### 환경 요구사항
+
+- Node.js 22 LTS · Windows 10/11
+- 여유 디스크 7 GB 이상
+
+### Windows 설치 파일 빌드
+
+```powershell
 npm install
+npm run dist:win
 ```
 
-### 3단계 — 환경 변수 설정
-
-```bash
-cp .env.example .env.local
-# .env.local 파일을 열어 값을 채워넣습니다 (아래 환경 변수 섹션 참고)
-```
-
-### 4단계 — Supabase 마이그레이션 실행
-
-Supabase Dashboard SQL Editor에서 `supabase/migrations/` 폴더의 파일을 번호 순서대로 실행합니다.
-
-### 5단계 — 개발 서버 시작
-
-```bash
-npm run dev
-```
-
-브라우저에서 `http://localhost:3000` 접속 후 열람 비밀번호 입력 → 바로 피드 화면 진입
-
----
-
-## 환경 변수 설정
-
-`.env.local` 파일에 아래 값을 설정합니다.
-
-```env
-# Supabase (필수)
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...   # 서버 전용, 절대 클라이언트에 노출 금지
-
-# 사이트 URL
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-
-# 열람 비밀번호 — 숫자 4자리 (초기값, /admin 페이지에서 변경 가능)
-VIEW_PASSWORD=1234
-
-# 관리자 비밀번호 — /admin 페이지 접근 및 열람 비밀번호 변경에 사용 (/admin에서 변경 가능)
-ADMIN_PASSWORD=your-admin-password
-
-# 세션 서명 시크릿 — 절대 외부 노출 금지, 변경 시 모든 세션 무효화
-# 생성: openssl rand -hex 32
-SESSION_SECRET=your-random-64-hex-chars
-
-# Upstash Redis — Rate Limiting (권장, 없으면 fail-open)
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=AX...
-
-# Microlink.io — URL 제목 자동 추출 (선택, 없으면 URL을 제목으로 사용)
-MICROLINK_API_KEY=
-```
-
-> **중요**: `.env.local`은 절대 git에 커밋하지 마세요. `.gitignore`에 이미 포함되어 있습니다.
-
----
-
-## Supabase 마이그레이션
-
-Supabase Dashboard > SQL Editor에서 아래 파일을 **번호 순서대로** 실행합니다:
+산출물:
 
 ```
-supabase/migrations/
-├── 001_initial_schema.sql      # 기본 테이블 구조
-├── 002_search_rpc.sql          # 검색 RPC 함수
-├── 003_user_profile_trigger.sql
-├── 004_fix_rls_recursion.sql
-├── 005_groups_upgrade.sql
-├── 006_username_auth.sql
-├── 007_public_only.sql
-├── 008_search_rpc_url.sql
-├── 009_site_config.sql         # 비밀번호 해시 저장 테이블 (필수)
-├── 010_collections.sql         # 컬렉션 폴더 기능 (필수)
-└── 011_item_category.sql       # 아이템 카테고리 자동 탐지 (필수)
+dist-electron/
+├── KIH-Setup-x.x.x-x64.exe           ← 배포용 설치 마법사
+└── win-unpacked/
+    └── Knowledge Information Hub.exe  ← 압축 해제 직접 실행
 ```
 
-> **009~011번은 반드시 실행해야 합니다.** 비밀번호 변경·컬렉션·카테고리 기능에 필요합니다.
+### 개발 서버
+
+```powershell
+npm run dev     # http://localhost:3737
+```
 
 ---
 
@@ -190,143 +87,50 @@ supabase/migrations/
 
 ```
 knowledge-information-hub/
+├── electron/
+│   ├── main.cjs            # Electron 메인 프로세스 (Next.js 내장 실행)
+│   └── assets/             # 아이콘 리소스
 ├── src/
-│   ├── actions/
-│   │   ├── site-auth.ts      # 로그인·비밀번호 변경 서버 액션
-│   │   ├── items.ts          # 콘텐츠 CRUD 서버 액션
-│   │   └── teams.ts          # 그룹 서버 액션
+│   ├── actions/            # Server Actions (CRUD)
 │   ├── app/
-│   │   ├── (auth)/login/     # 열람 비밀번호 입력 페이지
-│   │   ├── (dashboard)/      # 대시보드 (피드)
-│   │   │   ├── error.tsx     #   에러 바운더리 (WSOD 방지)
-│   │   │   └── loading.tsx   #   스켈레톤 로딩 UI
-│   │   ├── not-found.tsx     # 전역 404 페이지
-│   │   ├── admin/            # 관리자 설정 페이지 (비밀번호 변경)
-│   │   ├── api/og/           # OG 메타 추출 API
-│   │   └── share/            # 링크 공유 페이지
+│   │   ├── (dashboard)/    # 대시보드 · 탐색 · 휴지통
+│   │   ├── api/og/         # OG 메타 추출 API (SSRF 방어 적용)
+│   │   ├── onboarding/     # 최초 실행 초기화 화면
+│   │   └── share/          # 링크 공유 페이지
 │   ├── components/
-│   │   ├── items/            # ItemCard, ItemFeed, SaveItemButton, SearchBar
-│   │   ├── layout/           # TeamHeader (관리자 링크 + 로그아웃)
-│   │   └── ui/               # Toast 시스템
-│   ├── lib/
-│   │   ├── auth/session.ts   # Web Crypto API 세션 관리
-│   │   ├── supabase/         # Supabase 클라이언트 (server, client)
-│   │   ├── security/         # Rate Limiter
-│   │   ├── validations/      # Zod 스키마
-│   │   └── utils.ts          # 유틸리티
-│   ├── middleware.ts          # 세션 쿠키 검증 미들웨어
-│   └── types/                # TypeScript 타입 정의
-├── supabase/
-│   └── migrations/           # SQL 마이그레이션 파일 (001~011)
-├── public/
-│   ├── favicon.ico
-│   ├── icon-192.png
-│   ├── icon-512.png
-│   └── manifest.json
-├── .env.example              # 환경 변수 예시 (실제 값 없음)
-├── .gitignore
-├── LICENSE                   # MIT License (SoDam AI Studio)
+│   │   ├── items/          # ItemCard · ItemFeed · DashboardFeed · SaveItemButton
+│   │   ├── layout/         # TeamHeader
+│   │   └── ui/             # Toast 시스템
+│   └── lib/
+│       ├── db/sqlite.ts    # better-sqlite3 싱글톤
+│       ├── security/       # SSRF 방어 · 입력 검증
+│       └── validations/    # Zod 스키마
+├── db/
+│   └── migrations/         # SQLite 마이그레이션 (001~)
+├── scripts/
+│   ├── build-local.mjs     # standalone 빌드 스크립트
+│   └── backup.mjs          # 자동 백업 스크립트
+├── electron-builder.yml    # Electron 패키징 설정
+├── LOCAL.md                # 사용자 안내 (한국어)
+├── LOCAL.en.md             # 사용자 안내 (English)
 └── package.json
 ```
 
 ---
 
-## 배포 방법
+## 자주 묻는 질문
 
-### Vercel 배포 (권장)
+**Q. 앱이 떴는데 빈 화면이에요**  
+→ 작업 관리자에서 "Knowledge Information Hub" 모두 종료 후 재실행. 그래도 안 되면 `%APPDATA%\knowledge-information-hub\kih-server.log` 확인.
 
-1. [vercel.com](https://vercel.com)에서 저장소 Import
-2. Environment Variables에 `.env.local`의 모든 값 입력
-   - `SESSION_SECRET`은 `openssl rand -hex 32`로 새로 생성하세요
-   - `VIEW_PASSWORD`와 `ADMIN_PASSWORD`는 배포 전 반드시 변경하세요
-3. Supabase Dashboard SQL Editor에서 마이그레이션 **001~011** 번호 순서대로 실행
-4. 배포 후 `/admin` 페이지에서 열람·관리자 비밀번호 반드시 변경
+**Q. 데이터는 어디에 있나요?**  
+→ `%APPDATA%\knowledge-information-hub\data\kih.db` (Windows: `Win+R` → `%APPDATA%` 입력)
 
-```bash
-# Vercel CLI 사용 시
-npm i -g vercel
-vercel --prod
-```
+**Q. 인터넷 없어도 되나요?**  
+→ ✅ 완전 로컬. 단, 링크 저장 시 제목·썸네일 자동 추출은 인터넷 필요. 인터넷 없으면 URL 그대로 저장됨.
 
----
-
-## 운영 시 주의사항
-
-1. **`SUPABASE_SERVICE_ROLE_KEY`는 서버에서만 사용** — 클라이언트 코드에 포함하면 DB 전체가 노출됩니다.
-2. **`SESSION_SECRET` 절대 노출 금지** — 변경 시 모든 로그인 세션이 무효화됩니다. `openssl rand -hex 32`로 생성하세요.
-3. **초기 비밀번호 반드시 변경** — 배포 후 `/admin` 페이지에서 `VIEW_PASSWORD`와 `ADMIN_PASSWORD`를 변경하세요.
-4. **마이그레이션 순서 준수** — SQL 파일 번호(001~011) 순서대로 실행해야 합니다.
-5. **009번 마이그레이션 필수** — 비밀번호 변경 기능이 `site_config` 테이블을 사용합니다.
-6. **Rate Limiting** — Upstash Redis 미설정 시 fail-open(제한 없음)으로 동작합니다. 운영 환경에서는 반드시 설정하세요.
-7. **소프트 삭제** — 삭제된 항목은 30일 후 자동 정리되도록 Supabase pg_cron 설정 필요.
-8. **OG 메타 추출** — `/api/og` 엔드포인트는 세션 인증 후 접근 가능하며, SSRF 방어가 적용되어 있습니다.
-
----
-
-## 처음 시작하는 분을 위한 가이드
-
-> 코딩을 한 번도 해본 적 없어도 괜찮습니다! 아래 순서대로 따라하면 됩니다.
-
-### 필요한 것
-- 컴퓨터 (Windows / Mac)
-- 인터넷 연결
-- [Node.js](https://nodejs.org) 설치 (LTS 버전 권장)
-- [Supabase](https://supabase.com) 무료 계정
-- [Upstash](https://upstash.com) 무료 계정 (Redis, 선택이지만 권장)
-
-### 단계별 안내
-
-**1. Node.js 설치**
-- [nodejs.org](https://nodejs.org)에서 "LTS" 버전 다운로드 후 설치
-- 설치 완료 후 터미널에서 `node --version` 입력 → 버전 숫자가 나오면 성공
-
-**2. 소스코드 다운로드**
-- 이 페이지 상단 녹색 `Code` 버튼 > `Download ZIP` 클릭 후 압축 해제
-- 또는 `git clone https://github.com/sodam-ai/knowledge-information-hub.git`
-
-**3. 터미널에서 폴더 열기**
-- Windows: 폴더 안에서 Shift+우클릭 > "PowerShell 창 열기" 또는 "터미널에서 열기"
-- Mac: Finder에서 폴더 우클릭 > "서비스" > "폴더에서 새 터미널 열기"
-
-**4. 설치 명령어 실행**
-```
-npm install
-```
-(인터넷 속도에 따라 1~3분 소요)
-
-**5. Supabase 설정**
-- [supabase.com](https://supabase.com) 회원가입 > 새 프로젝트 생성
-- Project Settings > API에서 `Project URL`과 `anon public` 키 복사
-- `.env.example` 파일을 `.env.local`로 복사하고 복사한 값 붙여넣기
-- `SERVICE_ROLE_KEY`도 같은 페이지 `service_role` 항목에서 복사
-- `SESSION_SECRET`은 아무 긴 문자열 입력 (예: 키보드 무작위 64자 이상)
-- `ADMIN_PASSWORD`는 본인만 아는 비밀번호로 설정
-
-**6. 데이터베이스 준비**
-- Supabase 대시보드 > SQL Editor 접속
-- `supabase/migrations/` 폴더에 있는 파일을 001번부터 011번까지 순서대로 복사-붙여넣기 후 실행
-
-**7. 실행**
-```
-npm run dev
-```
-브라우저에서 `http://localhost:3000` 접속!
-열람 비밀번호(기본: `1234`) 입력 후 바로 피드 화면으로 진입합니다.
-
-**8. 비밀번호 변경 (중요!)**
-- `/admin` 페이지 접속 (설정한 관리자 비밀번호 입력)
-- 열람 비밀번호와 관리자 비밀번호를 안전한 값으로 변경하세요
-
-### 자주 묻는 질문
-
-**Q. "npm: command not found" 오류가 나요**
-A. Node.js가 설치되지 않았습니다. [nodejs.org](https://nodejs.org)에서 LTS 버전을 설치하세요.
-
-**Q. "EADDRINUSE" 오류가 나요**
-A. 이미 같은 포트를 사용하는 프로그램이 있습니다. `npx kill-port 3000` 실행 후 다시 시도하세요.
-
-**Q. 비밀번호를 잊어버렸어요**
-A. `.env.local`의 `VIEW_PASSWORD` 또는 `ADMIN_PASSWORD` 값을 확인하세요. 배포 환경이라면 Vercel > Environment Variables에서 확인하세요.
+**Q. 다른 PC와 동기화 가능한가요?**  
+→ ❌ 단일 사용자 전용. 수동 백업·이동만 가능.
 
 ---
 
