@@ -13,6 +13,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  rmSync,
   statSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -47,16 +48,14 @@ const migDest = join(STANDALONE, "db", "migrations");
 mkdirSync(migDest, { recursive: true });
 cpSync(join(ROOT, "db", "migrations"), migDest, { recursive: true });
 
-// better-sqlite3 네이티브 바이너리 보강 (Next standalone이 가끔 누락)
+// better-sqlite3 네이티브 바이너리 동기화 (Electron-rebuilt ABI 반드시 덮어쓰기)
 const bsqliteDest = join(STANDALONE, "node_modules", "better-sqlite3");
-if (!existsSync(join(bsqliteDest, "build"))) {
-  console.log("▶ better-sqlite3 네이티브 바이너리 보강");
-  cpSync(
-    join(ROOT, "node_modules", "better-sqlite3"),
-    bsqliteDest,
-    { recursive: true }
-  );
-}
+console.log("▶ better-sqlite3 네이티브 바이너리 동기화");
+cpSync(
+  join(ROOT, "node_modules", "better-sqlite3"),
+  bsqliteDest,
+  { recursive: true, force: true }
+);
 
 // start.bat/start.sh는 Electron 전용 패키징에서 제외 — 외부 브라우저 자동 열기 차단
 // (사용자가 .exe 외에 standalone 직접 실행 경로를 클릭할 가능성 영구 제거)
@@ -66,11 +65,10 @@ console.log("▶ backup 스크립트 복사");
 mkdirSync(join(STANDALONE, "scripts"), { recursive: true });
 cpSync(join(ROOT, "scripts", "backup.mjs"), join(STANDALONE, "scripts", "backup.mjs"));
 
-// data/ 폴더는 있으면 그대로 유지, 없으면 빈 폴더만
+// data/ 폴더는 항상 빈 폴더로 초기화 — kih.db·supabase-snapshot.json 등 개인정보가 번들에 포함되는 것을 방지
 const dataDest = join(STANDALONE, "data");
-if (!existsSync(dataDest)) {
-  mkdirSync(dataDest, { recursive: true });
-}
+rmSync(dataDest, { recursive: true, force: true });
+mkdirSync(dataDest, { recursive: true });
 
 // 사용 안내 문서
 const localDoc = join(ROOT, "LOCAL.md");
