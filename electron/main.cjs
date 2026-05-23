@@ -12,6 +12,7 @@ const HOSTNAME = "127.0.0.1";
 const APP_URL = `http://${HOSTNAME}:${PORT}`;
 
 let mainWindow = null;
+let logStream = null;
 
 // ── Single Instance Lock (다중 실행 방지, EADDRINUSE 차단) ──
 if (!app.requestSingleInstanceLock()) {
@@ -54,7 +55,7 @@ function startNextServerInProcess() {
 
   fs.mkdirSync(app.getPath("userData"), { recursive: true });
   const logFile = join(app.getPath("userData"), "kih-server.log");
-  const logStream = fs.createWriteStream(logFile, { flags: "a" });
+  logStream = fs.createWriteStream(logFile, { flags: "a" });
   logStream.write(
     `\n[${new Date().toISOString()}] in-process startNextServer\n  standalone: ${standalone}\n  serverPath exists: ${fs.existsSync(serverPath)}\n`
   );
@@ -108,8 +109,8 @@ function startNextServerInProcess() {
 async function waitForServer(maxAttempts = 30) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const res = await fetch(`${APP_URL}/login`);
-      if (res.ok) return true;
+      await fetch(`${APP_URL}/`);
+      return true; // 어떤 HTTP 응답이든 = 서버 준비 완료
     } catch {
       /* not ready */
     }
@@ -160,7 +161,12 @@ app.whenReady().then(async () => {
 
   const ready = await waitForServer();
   if (!ready) {
-    console.error("[KIH] Next server failed to start in time");
+    logStream && logStream.write(`[${new Date().toISOString()}] waitForServer timeout\n`);
+    dialog.showErrorBox(
+      "Knowledge Information Hub 시작 실패",
+      "서버가 15초 안에 시작되지 않았습니다.\n\n로그 파일:\n" +
+        join(app.getPath("userData"), "kih-server.log")
+    );
     app.quit();
     return;
   }
