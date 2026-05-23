@@ -1,0 +1,69 @@
+appId: studio.sodam-ai.kih
+productName: Knowledge Information Hub
+copyright: "© 2026 SoDam AI Studio"
+
+directories:
+  output: dist-electron
+  buildResources: electron/assets
+
+files:
+  - "electron/**/*"
+  - "package.json"
+
+asarUnpack:
+  - ".next/standalone/**/*"
+  - "node_modules/better-sqlite3/**/*"
+  - "db/migrations/**/*"
+
+extraResources:
+  - from: ".next-build/standalone"
+    to: "app.asar.unpacked/.next/standalone"
+    filter: ["**/*", "!data/**"]
+  - from: ".next-build/standalone/node_modules"
+    to: "app.asar.unpacked/.next/standalone/node_modules"
+    filter: ["**/*"]
+  - from: "db/migrations"
+    to: "app.asar.unpacked/db/migrations"
+    filter: ["**/*"]
+
+# ── Windows ───────────────────────────────────────────────
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: "KIH-${version}-${arch}.${ext}"
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: "KIH-Setup-${version}-${arch}.${ext}"
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "Knowledge Information Hub"
+
+# ── macOS ─────────────────────────────────────────────────
+mac:
+  icon: electron/assets/icon.png
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  artifactName: "KIH-${version}-${arch}.${ext}"
+  category: public.app-category.productivity
+
+# ── Linux ─────────────────────────────────────────────────
+linux:
+  icon: electron/assets/icon.png
+  maintainer: "SoDam AI Studio <noreply@github.com>"
+  target:
+    - AppImage
+    - deb
+  artifactName: "KIH-${version}-${arch}.${ext}"
+  category: Office
+
+# ── publish (GitHub Releases) ─────────────────────────────
+publish:
+  - provider: github
+    owner: sodam-ai
+    repo: knowledge-information-hub
+    releaseType: release

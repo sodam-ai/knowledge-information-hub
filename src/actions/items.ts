@@ -1,19 +1,82 @@
 "use server";
 
-import { createServiceClient } from "@/lib/supabase/server";
+import { getDb, newId } from "@/lib/db/sqlite";
 import { createLinkSchema, createNoteSchema } from "@/lib/validations";
 import { normalizeUrl, sanitizeText, sanitizeImageUrl } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
-import type { ActionResult, Item, ItemCategory } from "@/types";
+import type { ActionResult, Item, ItemCategory, Tag } from "@/types";
 import crypto from "crypto";
 
-const MICROLINK_TIMEOUT_MS = 7000;
+// ───────────────────────────────────────────────────────────
+// Helpers
+// ───────────────────────────────────────────────────────────
+
+interface ItemRow {
+  id: string;
+  type: Item["type"];
+  title: string;
+  content: string | null;
+  url: string | null;
+  url_hash: string | null;
+  file_path: string | null;
+  file_mime: string | null;
+  thumbnail_url: string | null;
+  collection_id: string | null;
+  category: ItemCategory | null;
+  is_pinned: number;
+  view_count: number;
+  team_id: string;
+  created_by: string | null;
+  is_deleted: number;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function hydrateItem(row: ItemRow): Item {
+  return {
+    ...row,
+    is_pinned: row.is_pinned === 1,
+    is_deleted: row.is_deleted === 1,
+  };
+}
+
+type SearchItem = Item & { tags: Tag[] };
+
+function attachTagsToItems(itemRows: ItemRow[]): SearchItem[] {
+  if (itemRows.length === 0) return [];
+  const db = getDb();
+  const ids = itemRows.map((r: ItemRow) => r.id);
+  const placeholders = ids.map(() => "?").join(",");
+  const tagRows = db
+    .prepare<string[], { item_id: string; id: string; name: string; color: string | null; team_id: string }>(
+      `SELECT it.item_id, t.id, t.name, t.color, t.team_id
+         FROM item_tags it
+         JOIN tags t ON t.id = it.tag_id
+        WHERE it.item_id IN (${placeholders})`
+    )
+    .all(...ids);
+
+  const tagsByItem = new Map<string, Tag[]>();
+  for (const r of tagRows) {
+    const list = tagsByItem.get(r.item_id) ?? [];
+    list.push({ id: r.id, name: r.name, color: r.color, team_id: r.team_id });
+    tagsByItem.set(r.item_id, list);
+  }
+
+  return itemRows.map((row) => ({
+    ...hydrateItem(row),
+    tags: tagsByItem.get(row.id) ?? [],
+  }));
+}
 
 function isYouTubeUrl(url: string): boolean {
   return /youtube\.com\/(watch|shorts\/)|youtu\.be\//.test(url);
 }
 
-async function fetchYouTubeOEmbed(url: string): Promise<{ title: string; thumbnail?: string } | null> {
+async function fetchYouTubeOEmbed(
+  url: string
+): Promise<{ title: string; thumbnail?: string } | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -33,38 +96,14 @@ async function fetchYouTubeOEmbed(url: string): Promise<{ title: string; thumbna
   }
 }
 
+// 클라이언트가 /api/og 라우트로 OG 메타를 받아 폼에 og_image/title을 채워 보냄.
+// 서버 액션은 그 값을 사용. 클라이언트가 비워 보낸 경우 YouTube만 추가 시도, 그 외엔 URL 그대로 제목.
 async function fetchLinkTitle(url: string): Promise<{ title: string; thumbnail?: string }> {
   if (isYouTubeUrl(url)) {
     const yt = await fetchYouTubeOEmbed(url);
     if (yt) return yt;
   }
-
-  try {
-    const apiUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}`;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (process.env.MICROLINK_API_KEY) {
-      headers["x-api-key"] = process.env.MICROLINK_API_KEY;
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), MICROLINK_TIMEOUT_MS);
-
-    const res = await fetch(apiUrl, { headers, signal: controller.signal, cache: "no-store" });
-    clearTimeout(timeout);
-
-    if (!res.ok) throw new Error("microlink 응답 오류");
-
-    const json = await res.json();
-    const rawTitle = json?.data?.title;
-    const rawImage = json?.data?.image?.url ?? json?.data?.screenshot?.url;
-
-    return {
-      title: sanitizeText(rawTitle, 500) || url,
-      thumbnail: sanitizeImageUrl(rawImage) ?? undefined,
-    };
-  } catch {
-    return { title: url };
-  }
+  return { title: url };
 }
 
 function detectItemCategory(type: string, url?: string | null): ItemCategory | null {
@@ -94,14 +133,38 @@ function detectItemCategory(type: string, url?: string | null): ItemCategory | n
   return null;
 }
 
+function attachTags(itemId: string, teamId: string, tagNames: string[]): void {
+  if (!tagNames.length) return;
+  const db = getDb();
+  const upsertTag = db.prepare(
+    `INSERT INTO tags (id, name, team_id) VALUES (?, ?, ?)
+     ON CONFLICT(name, team_id) DO UPDATE SET name = excluded.name
+     RETURNING id`
+  );
+  const linkTag = db.prepare(
+    `INSERT OR IGNORE INTO item_tags (item_id, tag_id, is_auto) VALUES (?, ?, 0)`
+  );
 
+  const insert = db.transaction((names: string[]) => {
+    for (const name of names.slice(0, 10)) {
+      const clean = sanitizeText(name.trim().toLowerCase(), 30);
+      if (!clean) continue;
+      const row = upsertTag.get(newId(), clean, teamId) as { id: string } | undefined;
+      if (row?.id) linkTag.run(itemId, row.id);
+    }
+  });
+  insert(tagNames);
+}
+
+// ───────────────────────────────────────────────────────────
+// createItem
+// ───────────────────────────────────────────────────────────
 export async function createItem(
   teamId: string,
   _: ActionResult<Item>,
   formData: FormData
 ): Promise<ActionResult<Item>> {
-  const supabase = createServiceClient();
-
+  const db = getDb();
   const type = formData.get("type") as string;
   const rawTags = formData.get("tags") as string;
   const tagNames: string[] = rawTags
@@ -110,7 +173,10 @@ export async function createItem(
   const collectionId = (formData.get("collection_id") as string | null) || null;
 
   const rawCategory = formData.get("category") as string | null;
-  const VALID_CATEGORIES: ItemCategory[] = ["article", "tutorial", "tool", "reference", "document", "idea", "video", "code", "news", "design", "product", "etc"];
+  const VALID_CATEGORIES: ItemCategory[] = [
+    "article", "tutorial", "tool", "reference", "document",
+    "idea", "video", "code", "news", "design", "product", "etc",
+  ];
   const userCategory: ItemCategory | null =
     rawCategory && VALID_CATEGORIES.includes(rawCategory as ItemCategory)
       ? (rawCategory as ItemCategory)
@@ -129,13 +195,11 @@ export async function createItem(
     const normalizedUrl = normalizeUrl(url);
     const urlHash = crypto.createHash("sha256").update(normalizedUrl).digest("hex");
 
-    const { data: duplicate } = await supabase
-      .from("items")
-      .select("id, title")
-      .eq("team_id", teamId)
-      .eq("url_hash", urlHash)
-      .eq("is_deleted", false)
-      .maybeSingle();
+    const duplicate = db
+      .prepare<[string, string], { id: string; title: string }>(
+        "SELECT id, title FROM items WHERE team_id = ? AND url_hash = ? AND is_deleted = 0 LIMIT 1"
+      )
+      .get(teamId, urlHash);
 
     const clientOgImage = sanitizeImageUrl(formData.get("og_image") as string | null);
 
@@ -150,31 +214,32 @@ export async function createItem(
       if (finalTitle === url) titleExtractFailed = true;
     }
 
-    const { data: item, error } = await supabase
-      .from("items")
-      .insert({
-        type: "link",
-        title: finalTitle,
+    const id = newId();
+    try {
+      db.prepare(
+        `INSERT INTO items (id, type, title, url, url_hash, thumbnail_url, team_id, created_by, collection_id, category, content)
+         VALUES (?, 'link', ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
+      ).run(
+        id,
+        finalTitle,
         url,
-        url_hash: urlHash,
-        thumbnail_url: thumbnail ?? null,
-        team_id: teamId,
-        created_by: null,
-        collection_id: collectionId,
-        category: userCategory ?? detectItemCategory("link", url),
-        content: (formData.get("content") as string | null)?.trim() || null,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("[createItem link] DB 오류:", error.code);
+        urlHash,
+        thumbnail ?? null,
+        teamId,
+        collectionId,
+        userCategory ?? detectItemCategory("link", url),
+        (formData.get("content") as string | null)?.trim() || null
+      );
+    } catch (err) {
+      console.error("[createItem link] DB 오류:", err instanceof Error ? err.message : err);
       return { error: "저장 중 오류가 발생했습니다." };
     }
 
-    await attachTags(supabase, item.id, teamId, tagNames);
+    attachTags(id, teamId, tagNames);
+    const row = db.prepare<[string], ItemRow>("SELECT * FROM items WHERE id = ?").get(id);
     revalidatePath("/dashboard");
 
+    const item = hydrateItem(row!);
     return {
       data: item,
       ...(duplicate ? { error: `duplicate:${duplicate.title}` } : {}),
@@ -191,278 +256,293 @@ export async function createItem(
     });
     if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-    const { data: item, error } = await supabase
-      .from("items")
-      .insert({
-        type: "note",
-        title: parsed.data.title,
-        content: parsed.data.content,
-        team_id: teamId,
-        created_by: null,
-        collection_id: collectionId,
-        category: userCategory ?? detectItemCategory("note"),
-      })
-      .select()
-      .single();
+    const id = newId();
+    try {
+      db.prepare(
+        `INSERT INTO items (id, type, title, content, team_id, created_by, collection_id, category)
+         VALUES (?, 'note', ?, ?, ?, NULL, ?, ?)`
+      ).run(
+        id,
+        parsed.data.title,
+        parsed.data.content,
+        teamId,
+        collectionId,
+        userCategory ?? detectItemCategory("note")
+      );
+    } catch {
+      return { error: "저장 중 오류가 발생했습니다." };
+    }
 
-    if (error) return { error: "저장 중 오류가 발생했습니다." };
-
-    await attachTags(supabase, item.id, teamId, tagNames);
+    attachTags(id, teamId, tagNames);
+    const row = db.prepare<[string], ItemRow>("SELECT * FROM items WHERE id = ?").get(id);
     revalidatePath("/dashboard");
-    return { data: item };
+    return { data: hydrateItem(row!) };
   }
 
   return { error: "지원하지 않는 콘텐츠 유형입니다." };
 }
 
-async function attachTags(
-  supabase: ReturnType<typeof createServiceClient>,
-  itemId: string,
-  teamId: string,
-  tagNames: string[]
-) {
-  if (!tagNames.length) return;
-
-  for (const name of tagNames.slice(0, 10)) {
-    const { data: tag } = await supabase
-      .from("tags")
-      .upsert({ name, team_id: teamId }, { onConflict: "name,team_id" })
-      .select()
-      .single();
-
-    if (tag) {
-      await supabase
-        .from("item_tags")
-        .upsert({ item_id: itemId, tag_id: tag.id }, { onConflict: "item_id,tag_id" });
-    }
+// ───────────────────────────────────────────────────────────
+// softDeleteItem
+// ───────────────────────────────────────────────────────────
+export async function softDeleteItem(itemId: string): Promise<ActionResult> {
+  try {
+    const db = getDb();
+    db.prepare(
+      "UPDATE items SET is_deleted = 1, deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
+    ).run(itemId);
+    revalidatePath("/dashboard");
+    return {};
+  } catch {
+    return { error: "삭제 중 오류가 발생했습니다." };
   }
 }
 
-export async function softDeleteItem(itemId: string): Promise<ActionResult> {
-  const supabase = createServiceClient();
-
-  const { error } = await supabase
-    .from("items")
-    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-    .eq("id", itemId);
-
-  if (error) return { error: "삭제 중 오류가 발생했습니다." };
-
-  revalidatePath("/dashboard");
-  return {};
+// ───────────────────────────────────────────────────────────
+// getTrashedItems — 휴지통 목록 (소프트 삭제된 항목)
+// ───────────────────────────────────────────────────────────
+export async function getTrashedItems(): Promise<ActionResult<SearchItem[]>> {
+  try {
+    const db = getDb();
+    const rows = db
+      .prepare<[], ItemRow>(
+        `SELECT * FROM items WHERE is_deleted = 1 ORDER BY deleted_at DESC LIMIT 100`
+      )
+      .all();
+    return { data: attachTagsToItems(rows) };
+  } catch {
+    return { error: "휴지통을 불러오는 중 오류가 발생했습니다." };
+  }
 }
 
+// ───────────────────────────────────────────────────────────
+// restoreItem — 휴지통에서 복원
+// ───────────────────────────────────────────────────────────
+export async function restoreItem(itemId: string): Promise<ActionResult> {
+  try {
+    const db = getDb();
+    db.prepare(
+      "UPDATE items SET is_deleted = 0, deleted_at = NULL WHERE id = ? AND is_deleted = 1"
+    ).run(itemId);
+    revalidatePath("/dashboard");
+    return {};
+  } catch {
+    return { error: "복원 중 오류가 발생했습니다." };
+  }
+}
+
+// ───────────────────────────────────────────────────────────
+// permanentDeleteItem — 영구 삭제 (비가역)
+// ───────────────────────────────────────────────────────────
+export async function permanentDeleteItem(itemId: string): Promise<ActionResult> {
+  try {
+    const db = getDb();
+    // 휴지통(is_deleted=1) 항목만 영구 삭제 가능 — 실수 방지
+    const result = db.prepare("DELETE FROM items WHERE id = ? AND is_deleted = 1").run(itemId);
+    if (result.changes === 0) return { error: "휴지통에 없는 항목입니다." };
+    revalidatePath("/dashboard");
+    return {};
+  } catch {
+    return { error: "영구 삭제 중 오류가 발생했습니다." };
+  }
+}
+
+// ───────────────────────────────────────────────────────────
+// getMoreItems
+// ───────────────────────────────────────────────────────────
 export async function getMoreItems(
   teamId: string,
   offset: number,
   type?: "link" | "note"
-): Promise<ActionResult<(Item & { tags: { id: string; name: string; color: string | null }[] })[]>> {
-  const supabase = createServiceClient();
-
-  let query = supabase
-    .from("items")
-    .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
-    .eq("is_deleted", false)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + 19);
-
-  if (teamId !== "all") query = query.eq("team_id", teamId);
-  if (type) query = query.eq("type", type);
-
-  const { data, error } = await query;
-  if (error) return { error: "불러오기 실패" };
-
-  type TagRow = { id: string; name: string; color: string | null; team_id: string };
-  const rawItems = (data ?? []) as unknown as (Item & { item_tags?: { tags: TagRow }[] })[];
-  const items = rawItems.map((item) => ({
-    ...item,
-    tags: (item.item_tags ?? []).map((it: { tags: TagRow }) => it.tags),
-  }));
-
-  return { data: items };
+): Promise<ActionResult<SearchItem[]>> {
+  try {
+    const db = getDb();
+    const conds = ["is_deleted = 0"];
+    const params: (string | number)[] = [];
+    if (teamId !== "all") {
+      conds.push("team_id = ?");
+      params.push(teamId);
+    }
+    if (type) {
+      conds.push("type = ?");
+      params.push(type);
+    }
+    const sql = `SELECT * FROM items WHERE ${conds.join(" AND ")} ORDER BY created_at DESC LIMIT 20 OFFSET ?`;
+    params.push(offset);
+    const rows = db.prepare<typeof params, ItemRow>(sql).all(...params);
+    return { data: attachTagsToItems(rows) };
+  } catch {
+    return { error: "불러오기 실패" };
+  }
 }
 
+// ───────────────────────────────────────────────────────────
+// updateItem
+// ───────────────────────────────────────────────────────────
 export async function updateItem(
   itemId: string,
   fields: { title?: string; content?: string; tags?: string; category?: ItemCategory | null }
 ): Promise<ActionResult> {
-  const supabase = createServiceClient();
-
-  const { data: item } = await supabase
-    .from("items")
-    .select("id, team_id")
-    .eq("id", itemId)
-    .eq("is_deleted", false)
-    .single();
-
+  const db = getDb();
+  const item = db
+    .prepare<[string], { id: string; team_id: string }>(
+      "SELECT id, team_id FROM items WHERE id = ? AND is_deleted = 0 LIMIT 1"
+    )
+    .get(itemId);
   if (!item) return { error: "항목을 찾을 수 없습니다." };
 
-  const updates: Record<string, string | null> = {};
+  const updates: { col: string; val: string | null }[] = [];
   if (fields.title !== undefined) {
     const clean = sanitizeText(fields.title.trim(), 500);
     if (!clean || clean.length > 500) return { error: "제목은 1~500자여야 합니다." };
-    updates.title = clean;
+    updates.push({ col: "title", val: clean });
   }
   if (fields.content !== undefined) {
-    updates.content = sanitizeText(fields.content.trim(), 50000);
+    updates.push({ col: "content", val: sanitizeText(fields.content.trim(), 50000) || null });
   }
   if (fields.category !== undefined) {
-    updates.category = fields.category ?? null;
+    updates.push({ col: "category", val: fields.category ?? null });
   }
 
-  if (Object.keys(updates).length > 0) {
-    updates.updated_at = new Date().toISOString();
-    const { error: updateErr } = await supabase
-      .from("items")
-      .update(updates)
-      .eq("id", itemId);
-    if (updateErr) return { error: "수정 중 오류가 발생했습니다." };
-  }
-
-  if (fields.tags !== undefined) {
-    const rawTags = fields.tags
-      .split(",")
-      .map((t) => sanitizeText(t.trim().toLowerCase(), 30))
-      .filter((t) => t.length > 0 && t.length <= 30)
-      .slice(0, 10);
-
-    await supabase.from("item_tags").delete().eq("item_id", itemId);
-
-    if (rawTags.length > 0) {
-      const { data: tagRows } = await supabase
-        .from("tags")
-        .upsert(
-          rawTags.map((name) => ({ name, team_id: item.team_id })),
-          { onConflict: "name,team_id", ignoreDuplicates: false }
-        )
-        .select("id");
-
-      if (tagRows && tagRows.length > 0) {
-        await supabase.from("item_tags").insert(
-          tagRows.map((t: { id: string }) => ({ item_id: itemId, tag_id: t.id, is_auto: false }))
-        );
-      }
+  try {
+    if (updates.length > 0) {
+      const setClause = updates.map((u) => `${u.col} = ?`).join(", ");
+      const sql = `UPDATE items SET ${setClause} WHERE id = ?`;
+      db.prepare(sql).run(...updates.map((u) => u.val), itemId);
     }
+
+    if (fields.tags !== undefined) {
+      const rawTags = fields.tags
+        .split(",")
+        .map((t) => sanitizeText(t.trim().toLowerCase(), 30))
+        .filter((t) => t.length > 0 && t.length <= 30)
+        .slice(0, 10);
+
+      db.prepare("DELETE FROM item_tags WHERE item_id = ?").run(itemId);
+      if (rawTags.length > 0) attachTags(itemId, item.team_id, rawTags);
+    }
+  } catch {
+    return { error: "수정 중 오류가 발생했습니다." };
   }
 
   revalidatePath("/dashboard");
   return {};
 }
 
+// ───────────────────────────────────────────────────────────
+// togglePinItem
+// ───────────────────────────────────────────────────────────
 export async function togglePinItem(itemId: string): Promise<ActionResult<boolean>> {
-  const supabase = createServiceClient();
+  const db = getDb();
+  const row = db
+    .prepare<[string], { is_pinned: number }>(
+      "SELECT is_pinned FROM items WHERE id = ? AND is_deleted = 0"
+    )
+    .get(itemId);
+  if (!row) return { error: "항목을 찾을 수 없습니다." };
 
-  const { data: item } = await supabase
-    .from("items")
-    .select("id, is_pinned")
-    .eq("id", itemId)
-    .eq("is_deleted", false)
-    .single();
-
-  if (!item) return { error: "항목을 찾을 수 없습니다." };
-
-  const newPinned = !item.is_pinned;
-  const { error } = await supabase
-    .from("items")
-    .update({ is_pinned: newPinned, updated_at: new Date().toISOString() })
-    .eq("id", itemId);
-
-  if (error) return { error: "핀 처리 중 오류가 발생했습니다." };
+  const newPinned = row.is_pinned === 1 ? 0 : 1;
+  try {
+    db.prepare("UPDATE items SET is_pinned = ? WHERE id = ?").run(newPinned, itemId);
+  } catch {
+    return { error: "핀 처리 중 오류가 발생했습니다." };
+  }
 
   revalidatePath("/dashboard");
-  return { data: newPinned };
+  return { data: newPinned === 1 };
 }
 
-type SearchItem = Item & { tags: { id: string; name: string; color: string | null; team_id: string }[] };
-type STagRow = { id: string; name: string; color: string | null; team_id: string };
-
-function normalizeItemRows(data: unknown[]): SearchItem[] {
-  const raw = data as (Item & { item_tags?: { tags: STagRow }[] })[];
-  return raw.map((item) => ({
-    ...item,
-    tags: (item.item_tags ?? []).map((it: { tags: STagRow }) => it.tags),
-  }));
+// ───────────────────────────────────────────────────────────
+// searchItems (FTS5 2자+ / LIKE 1자 / tag 보강)
+// ───────────────────────────────────────────────────────────
+function escapeFts(q: string): string {
+  // FTS5 phrase 매칭: 큰따옴표 escape 후 감싸기 — 사용자 입력의 연산자 무력화
+  return `"${q.replace(/"/g, '""')}"`;
 }
 
 export async function searchItems(
   teamId: string,
   query: string
 ): Promise<ActionResult<SearchItem[]>> {
-  const supabase = createServiceClient();
-
-  // Strip leading # for tag-prefix searches
+  const db = getDb();
   const q = query.startsWith("#") ? query.slice(1).trim() : query.trim();
-
   if (q.length < 1) return { error: "검색어를 입력해주세요." };
   if (q.length > 200) return { error: "검색어가 너무 깁니다." };
 
-  async function fetchTagMatchItems(excludeIds: Set<string>): Promise<SearchItem[]> {
-    const { data: matchedTags } = await supabase
-      .from("tags")
-      .select("id")
-      .ilike("name", `%${q}%`)
-      .limit(20);
-    if (!matchedTags?.length) return [];
+  try {
+    let textRows: ItemRow[];
 
-    const tagIds = matchedTags.map((t: { id: string }) => t.id);
-    const { data: linkRows } = await supabase
-      .from("item_tags")
-      .select("item_id")
-      .in("tag_id", tagIds)
-      .limit(50);
-    if (!linkRows?.length) return [];
-
-    const newIds = ([...new Set(linkRows.map((r: { item_id: string }) => r.item_id))] as string[])
-      .filter((id) => !excludeIds.has(id))
-      .slice(0, 10);
-    if (!newIds.length) return [];
-
-    let tagQ = supabase
-      .from("items")
-      .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
-      .eq("is_deleted", false)
-      .in("id", newIds)
-      .order("created_at", { ascending: false });
-    if (teamId !== "all") tagQ = tagQ.eq("team_id", teamId);
-    const { data } = await tagQ;
-    return normalizeItemRows(data ?? []);
-  }
-
-  if (teamId === "all" || q.length < 2) {
-    let dbQ = supabase
-      .from("items")
-      .select("*, item_tags(tag_id, tags(id, name, color, team_id))")
-      .eq("is_deleted", false)
-      .or(`title.ilike.%${q}%,content.ilike.%${q}%,url.ilike.%${q}%`)
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (teamId !== "all") dbQ = dbQ.eq("team_id", teamId);
-
-    const { data, error } = await dbQ;
-    if (error) {
-      console.error("[searchItems:ilike] 오류:", error.code);
-      return { error: "검색 중 오류가 발생했습니다." };
+    if (q.length < 2) {
+      // 1자 검색은 FTS5 토크나이저가 단일 글자 토큰을 인덱싱 안 함 — LIKE 직접 매칭
+      const conds = ["is_deleted = 0", "(title LIKE ? OR content LIKE ? OR url LIKE ?)"];
+      const params: (string | number)[] = [`%${q}%`, `%${q}%`, `%${q}%`];
+      if (teamId !== "all") {
+        conds.push("team_id = ?");
+        params.push(teamId);
+      }
+      textRows = db
+        .prepare<typeof params, ItemRow>(
+          `SELECT * FROM items WHERE ${conds.join(" AND ")} ORDER BY created_at DESC LIMIT 20`
+        )
+        .all(...params);
+    } else {
+      // 2자+: FTS5 unicode61 토크나이저 + phrase 매칭
+      const conds = ["i.is_deleted = 0", "items_fts MATCH ?"];
+      const params: (string | number)[] = [escapeFts(q)];
+      if (teamId !== "all") {
+        conds.push("i.team_id = ?");
+        params.push(teamId);
+      }
+      textRows = db
+        .prepare<typeof params, ItemRow>(
+          `SELECT i.* FROM items i JOIN items_fts ON items_fts.item_id = i.id
+            WHERE ${conds.join(" AND ")} ORDER BY rank LIMIT 20`
+        )
+        .all(...params);
     }
 
-    const textItems = normalizeItemRows(data ?? []);
+    const textItems = attachTagsToItems(textRows);
     const textIds = new Set(textItems.map((i) => i.id));
-    const tagItems = await fetchTagMatchItems(textIds);
+
+    // 태그명 매칭으로 추가 결과 보강
+    const tagRows = db
+      .prepare<[string], { id: string }>(
+        "SELECT id FROM tags WHERE name LIKE ? LIMIT 20"
+      )
+      .all(`%${q.toLowerCase()}%`);
+    if (tagRows.length === 0) return { data: textItems };
+
+    const tagIds = tagRows.map((r: { id: string }) => r.id);
+    const tagPlaceholders = tagIds.map(() => "?").join(",");
+    const linkRows = db
+      .prepare<string[], { item_id: string }>(
+        `SELECT DISTINCT item_id FROM item_tags WHERE tag_id IN (${tagPlaceholders}) LIMIT 50`
+      )
+      .all(...tagIds);
+
+    const tagItemIds = linkRows
+      .map((r: { item_id: string }) => r.item_id)
+      .filter((id: string) => !textIds.has(id))
+      .slice(0, 10);
+    if (tagItemIds.length === 0) return { data: textItems };
+
+    const placeholders = tagItemIds.map(() => "?").join(",");
+    const tagItemConds = [`id IN (${placeholders})`, "is_deleted = 0"];
+    const tagItemParams: string[] = [...tagItemIds];
+    if (teamId !== "all") {
+      tagItemConds.push("team_id = ?");
+      tagItemParams.push(teamId);
+    }
+    const tagItemRows = db
+      .prepare<typeof tagItemParams, ItemRow>(
+        `SELECT * FROM items WHERE ${tagItemConds.join(" AND ")} ORDER BY created_at DESC`
+      )
+      .all(...tagItemParams);
+
+    const tagItems = attachTagsToItems(tagItemRows);
     return { data: [...textItems, ...tagItems] };
-  }
-
-  // 2자 이상, 특정 팀: pg_trgm similarity RPC
-  const { data, error } = await supabase.rpc("search_items", {
-    p_team_id: teamId,
-    p_query: q,
-  });
-
-  if (error) {
-    console.error("[searchItems] RPC 오류:", error.code);
+  } catch (err) {
+    console.error("[searchItems] 오류:", err instanceof Error ? err.message : err);
     return { error: "검색 중 오류가 발생했습니다." };
   }
-
-  const rpcItems = (data ?? []) as SearchItem[];
-  const rpcIds = new Set(rpcItems.map((i) => i.id));
-  const tagItems = await fetchTagMatchItems(rpcIds);
-  return { data: [...rpcItems, ...tagItems] };
 }

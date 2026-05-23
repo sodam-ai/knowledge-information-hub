@@ -3,17 +3,19 @@
  * manifest.json의 share_target.action과 일치
  */
 import { Suspense } from "react";
-import { createServiceClient } from "@/lib/supabase/server";
+import { getDb } from "@/lib/db/sqlite";
 import ShareContent from "./ShareContent";
 
-export default async function SharePage() {
-  const supabase = createServiceClient();
-  const { data } = await supabase
-    .from("teams")
-    .select("id, name")
-    .order("created_at", { ascending: true });
+// 매 요청마다 SQLite 실시간 조회 — 정적 prerender 방지
+export const dynamic = "force-dynamic";
 
-  const teams = (data ?? []) as { id: string; name: string }[];
+export default async function SharePage() {
+  const db = getDb();
+  const teams = db
+    .prepare<[], { id: string; name: string }>(
+      "SELECT id, name FROM teams ORDER BY created_at ASC"
+    )
+    .all();
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-zinc-50" />}>

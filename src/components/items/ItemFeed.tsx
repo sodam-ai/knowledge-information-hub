@@ -181,13 +181,9 @@ export default function ItemFeed({
   const itemsLengthRef = useRef(items.length);
   useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
 
-  const prevTotalRef = useRef(totalCount);
   useEffect(() => {
-    if (totalCount !== prevTotalRef.current) {
-      prevTotalRef.current = totalCount;
-      setItems(sortItems(initialItems));
-    }
-  }, [totalCount, initialItems]);
+    setItems(sortItems(initialItems));
+  }, [initialItems]);
 
   // 필터 파이프라인: 타입 -> 태그 -> 날짜 -> 컬렉션 -> 카테고리
   const typeFiltered = filter === "all" ? items : items.filter((i) => i.type === filter);

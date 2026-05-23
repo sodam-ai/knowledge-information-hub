@@ -1,8 +1,7 @@
 "use client";
 
-import { signOut } from "@/actions/site-auth";
 import Link from "next/link";
-import { ShieldCheck, LogOut } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 export default function TeamHeader() {
   return (
@@ -19,26 +18,16 @@ export default function TeamHeader() {
           <span className="text-sm font-semibold text-zinc-900 truncate">Knowledge Information Hub</span>
         </div>
 
-        {/* 오른쪽: 관리자 + 로그아웃 */}
+        {/* 오른쪽: 휴지통 */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <Link
-            href="/admin"
+            href="/trash"
             className="p-1.5 text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
-            title="관리자 설정"
-            aria-label="관리자 설정"
+            title="휴지통"
+            aria-label="휴지통"
           >
-            <ShieldCheck className="w-4 h-4" />
+            <Trash2 className="w-4 h-4" />
           </Link>
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="p-1.5 text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors"
-              title="로그아웃"
-              aria-label="로그아웃"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </form>
         </div>
       </div>
     </header>

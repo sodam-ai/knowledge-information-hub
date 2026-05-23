@@ -42,7 +42,9 @@ export async function verifySessionToken(token: string): Promise<boolean> {
     if (!exp || !sig) return false;
     if (Date.now() >= Number(exp)) return false;
     const key = await getHmacKey();
-    return crypto.subtle.verify("HMAC", key, hexDecode(sig).buffer as ArrayBuffer, new TextEncoder().encode(exp));
+    // verify 대신 sign + string compare — Next 15 minifier instance check 함정 영구 회피
+    const expectedSig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(exp));
+    return hexEncode(expectedSig) === sig;
   } catch {
     return false;
   }

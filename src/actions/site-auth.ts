@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createServiceClient } from "@/lib/supabase/server";
+import { getDb } from "@/lib/db/sqlite";
 import {
   createSessionToken,
   hashPassword,
@@ -11,14 +11,16 @@ import {
 } from "@/lib/auth/session";
 import type { ActionResult } from "@/types";
 
-async function getStoredPasswordHash(): Promise<string | null> {
-  const db = createServiceClient();
-  const { data } = await db
-    .from("site_config")
-    .select("value")
-    .eq("key", "view_password_hash")
-    .maybeSingle();
-  return data?.value ?? null;
+interface SiteConfigRow {
+  value: string;
+}
+
+function getStoredPasswordHash(): string | null {
+  const db = getDb();
+  const row = db
+    .prepare<[string], SiteConfigRow>("SELECT value FROM site_config WHERE key = ?")
+    .get("view_password_hash");
+  return row?.value ?? null;
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
@@ -31,32 +33,71 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 async function verifyAdminPassword(input: string): Promise<boolean> {
-  const db = createServiceClient();
-  const { data } = await db
-    .from("site_config")
-    .select("value")
-    .eq("key", "admin_password_hash")
-    .maybeSingle();
+  const db = getDb();
+  const row = db
+    .prepare<[string], SiteConfigRow>("SELECT value FROM site_config WHERE key = ?")
+    .get("admin_password_hash");
 
-  if (data?.value) {
-    // UI를 통해 변경된 이후 — 해시 비교
+  if (row?.value) {
     const inputHash = await hashPassword(input);
-    return timingSafeEqual(inputHash, data.value);
+    return timingSafeEqual(inputHash, row.value);
   }
 
-  // 최초 설정 — 환경 변수 평문 비교
+  // 최초 설정 — 환경변수 평문 비교
   const envAdmin = process.env.ADMIN_PASSWORD ?? "";
   return timingSafeEqual(input, envAdmin);
+}
+
+function upsertSiteConfig(key: string, value: string): void {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO site_config (key, value, updated_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+  ).run(key, value);
+}
+
+function getAuthEnabledFlag(): boolean {
+  const db = getDb();
+  const row = db
+    .prepare<[string], SiteConfigRow>("SELECT value FROM site_config WHERE key = ?")
+    .get("auth_enabled");
+  return row?.value !== "0";
+}
+
+export async function getAuthEnabled(): Promise<boolean> {
+  return getAuthEnabledFlag();
+}
+
+export async function setAuthEnabled(
+  enabled: boolean,
+  adminPassword: string
+): Promise<ActionResult<boolean>> {
+  if (!adminPassword) return { error: "관리자 비밀번호를 입력해주세요." };
+  if (!(await verifyAdminPassword(adminPassword))) {
+    return { error: "관리자 비밀번호가 올바르지 않습니다." };
+  }
+  try {
+    upsertSiteConfig("auth_enabled", enabled ? "1" : "0");
+    return { data: enabled };
+  } catch {
+    return { error: "설정 변경 중 오류가 발생했습니다." };
+  }
 }
 
 export async function signIn(
   _: ActionResult,
   formData: FormData
 ): Promise<ActionResult> {
+  if (!getAuthEnabledFlag()) {
+    const cookieStore = await cookies();
+    cookieStore.set(SESSION_COOKIE, await createSessionToken(), sessionCookieOptions());
+    redirect("/dashboard");
+  }
+
   const password = (formData.get("password") as string)?.trim();
   if (!password) return { error: "비밀번호를 입력해주세요." };
 
-  const storedHash = await getStoredPasswordHash();
+  const storedHash = getStoredPasswordHash();
   const envPassword = process.env.VIEW_PASSWORD;
   const expected = storedHash ?? (envPassword ? await hashPassword(envPassword) : null);
   if (!expected) return { error: "서버 설정 오류입니다. 관리자에게 문의하세요." };
@@ -69,12 +110,6 @@ export async function signIn(
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, await createSessionToken(), sessionCookieOptions());
   redirect("/dashboard");
-}
-
-export async function signOut() {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
-  redirect("/login");
 }
 
 export async function changeViewPassword(
@@ -96,14 +131,13 @@ export async function changeViewPassword(
   if (newPassword !== confirmPassword) return { error: "새 비밀번호가 일치하지 않습니다." };
   if (!/^\d{4}$/.test(newPassword)) return { error: "열람 비밀번호는 숫자 4자리여야 합니다." };
 
-  const newHash = await hashPassword(newPassword);
-  const db = createServiceClient();
-  const { error } = await db
-    .from("site_config")
-    .upsert({ key: "view_password_hash", value: newHash, updated_at: new Date().toISOString() });
-
-  if (error) return { error: "비밀번호 변경 중 오류가 발생했습니다." };
-  return { data: true };
+  try {
+    const newHash = await hashPassword(newPassword);
+    upsertSiteConfig("view_password_hash", newHash);
+    return { data: true };
+  } catch {
+    return { error: "비밀번호 변경 중 오류가 발생했습니다." };
+  }
 }
 
 export async function verifyAdminAccess(password: string): Promise<ActionResult<boolean>> {
@@ -132,12 +166,11 @@ export async function changeAdminPassword(
   if (newPassword !== confirmPassword) return { error: "새 비밀번호가 일치하지 않습니다." };
   if (newPassword.length < 4) return { error: "비밀번호는 4자 이상이어야 합니다." };
 
-  const newHash = await hashPassword(newPassword);
-  const db = createServiceClient();
-  const { error } = await db
-    .from("site_config")
-    .upsert({ key: "admin_password_hash", value: newHash, updated_at: new Date().toISOString() });
-
-  if (error) return { error: "비밀번호 변경 중 오류가 발생했습니다." };
-  return { data: true };
+  try {
+    const newHash = await hashPassword(newPassword);
+    upsertSiteConfig("admin_password_hash", newHash);
+    return { data: true };
+  } catch {
+    return { error: "비밀번호 변경 중 오류가 발생했습니다." };
+  }
 }
