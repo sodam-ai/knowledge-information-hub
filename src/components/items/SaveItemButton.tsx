@@ -9,7 +9,7 @@ import {
   Plus, Link2, FileText, X, AlertCircle, Info,
   Loader2, Sparkles, Clipboard,
 } from "lucide-react";
-import type { ActionResult, Item, Collection, ItemCategory } from "@/types";
+import type { ActionResult, Item, Tag, Collection, ItemCategory } from "@/types";
 import { ITEM_CATEGORY_LABELS } from "@/types";
 
 interface SaveItemButtonProps {
@@ -17,6 +17,7 @@ interface SaveItemButtonProps {
   prefillUrl?: string;
   open?: boolean;
   onClose?: () => void;
+  onItemSaved?: (item: Item & { tags?: Tag[] }) => void;
 }
 
 interface OgMeta {
@@ -115,6 +116,7 @@ export default function SaveItemButton({
   prefillUrl,
   open: controlledOpen,
   onClose,
+  onItemSaved,
 }: SaveItemButtonProps) {
   const [internalOpen, setInternalOpen] = useState(!!prefillUrl);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -226,7 +228,11 @@ export default function SaveItemButton({
       if (!result.error) {
         formRef.current?.reset();
         setOpen(false);
-        router.refresh();
+        if (onItemSaved && result.data) {
+          onItemSaved({ ...result.data, tags: [] });
+        } else {
+          router.refresh();
+        }
         success("저장되었어요!");
       }
       return result;

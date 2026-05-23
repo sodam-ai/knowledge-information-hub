@@ -3,8 +3,7 @@ import { getDb, newId } from "@/lib/db/sqlite";
 
 // 매 요청마다 SQLite 실시간 조회 — 정적 prerender 방지
 export const dynamic = "force-dynamic";
-import ItemFeed from "@/components/items/ItemFeed";
-import SaveItemButton from "@/components/items/SaveItemButton";
+import DashboardFeed from "@/components/items/DashboardFeed";
 import SearchBar from "@/components/items/SearchBar";
 import TeamHeader from "@/components/layout/TeamHeader";
 import type { Team, ItemType, ItemCategory, Tag } from "@/types";
@@ -125,21 +124,10 @@ export default async function DashboardPage() {
       <main className="max-w-5xl mx-auto px-4 py-5 space-y-4">
         <SearchBar teamId="all" />
 
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-900">전체 피드</h2>
-            {totalCount > 0 && (
-              <p className="text-xs text-zinc-400 mt-0.5">{totalCount}개 항목</p>
-            )}
-          </div>
-          <SaveItemButton teamId={teamsArr[0].id} />
-        </div>
-
-        <ItemFeed
-          key="all"
+        <DashboardFeed
+          teamId={teamsArr[0].id}
           initialItems={mappedItems}
-          teamId="all"
-          totalCount={mappedItems.length}
+          totalCount={totalCount}
           collections={[]}
         />
       </main>
